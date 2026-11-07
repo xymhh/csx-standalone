@@ -4,6 +4,7 @@ import { accountsApi, settingsApi, type Account, type SettingSection } from '@/l
 import Tabs from '@/components/ui/Tabs.vue'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
+import Select from '@/components/ui/Select.vue'
 import Dialog from '@/components/ui/Dialog.vue'
 import Badge from '@/components/ui/Badge.vue'
 import { useToast } from '@/composables/useToast'
@@ -85,9 +86,20 @@ async function testAccount(id: number) {
   <div class="space-y-5">
     <div><h2 class="text-xl font-semibold">系统设置</h2><p class="text-sm text-muted">按职责分组管理系统策略与账号凭据</p></div>
     <Tabs v-model="section" :items="sections" />
-    <section class="space-y-3 rounded-card border border-border bg-surface p-4 sm:p-5">
-      <div class="flex items-center justify-between"><div><h3 class="font-semibold">{{ sections.find((item) => item.value === section)?.label }}设置</h3><p class="mt-1 text-xs text-muted">配置以 JSON 对象保存，可保留布尔值、数字、数组与嵌套字段。</p></div><Button size="sm" @click="save">保存本组</Button></div>
-      <textarea v-model="editor" spellcheck="false" aria-label="设置 JSON" class="min-h-72 w-full rounded-md border border-border bg-surface-2 p-3 font-mono text-sm text-fg outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+    <section class="grid gap-6 rounded-xl border border-border bg-surface p-5 shadow-sm shadow-black/40 lg:grid-cols-[minmax(220px,0.8fr)_minmax(0,1.6fr)] lg:p-6">
+      <div class="space-y-2">
+        <p class="font-mono text-[10px] uppercase tracking-[0.18em] text-subtle">Configuration</p>
+        <h3 class="text-base font-semibold tracking-tight">{{ sections.find((item) => item.value === section)?.label }}设置</h3>
+        <p class="text-sm leading-relaxed text-muted">按分组管理系统策略。配置以 JSON 对象保存，可包含布尔值、数字、数组与嵌套字段。</p>
+        <Badge tone="muted">{{ section }}</Badge>
+      </div>
+      <div class="space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <span class="text-xs text-muted">本组设置数据</span>
+          <Button size="sm" @click="save">保存本组</Button>
+        </div>
+        <textarea v-model="editor" spellcheck="false" aria-label="设置 JSON" class="min-h-72 w-full bg-bg/70 p-4 font-mono text-sm leading-6 text-fg focus-visible:ring-1 focus-visible:ring-focus" />
+      </div>
     </section>
     <section class="space-y-3">
       <div class="flex items-center justify-between"><h3 class="font-semibold">网盘账号</h3><Button variant="outline" @click="open = true">添加账号</Button></div>
@@ -100,7 +112,7 @@ async function testAccount(id: number) {
     </section>
     <Dialog :open="open" :title="editing ? '编辑网盘账号' : '添加网盘账号'" @close="open = false; editing = null">
       <form class="space-y-3" @submit.prevent="saveAccount">
-        <label v-if="!editing" class="block space-y-1 text-sm">服务商<select v-model="provider" class="min-h-[44px] w-full rounded-md border border-border bg-surface-2 px-3"><option value="115">115</option><option value="quark">夸克</option></select></label>
+        <label v-if="!editing" class="block space-y-1 text-sm">服务商<Select v-model="provider" :options="[{ value: '115', label: '115 网盘' }, { value: 'quark', label: '夸克网盘' }]" /></label>
         <label class="block space-y-1 text-sm">账号名称<Input v-model="name" required placeholder="家庭账号" /></label>
         <label class="block space-y-1 text-sm">凭据<Input v-model="credential" type="password" autocomplete="new-password" :placeholder="editing ? '留空则保留原凭据' : '只在提交时发送，不会回显'" :required="!editing" /></label>
         <Button type="submit" class="w-full">{{ editing ? '保存修改' : '添加并加密保存' }}</Button>

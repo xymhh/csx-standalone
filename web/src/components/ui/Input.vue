@@ -20,8 +20,8 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 
 const classes = computed(() =>
   cn(
-    'min-h-[44px] w-full rounded-md border bg-surface-2 px-3 text-sm text-fg placeholder:text-muted/70',
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+    'min-h-[44px] w-full rounded-lg border bg-surface/80 px-3 text-sm text-fg placeholder:text-subtle',
+    'transition-colors focus-visible:border-focus focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus',
     'disabled:opacity-50',
     props.invalid ? 'border-status-missing' : 'border-border',
     props.class,

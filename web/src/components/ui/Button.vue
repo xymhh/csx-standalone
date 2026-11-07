@@ -4,7 +4,7 @@ import { computed } from 'vue'
 
 import { cn } from '@/lib/utils'
 
-type Variant = 'default' | 'outline' | 'ghost'
+type Variant = 'default' | 'secondary' | 'outline' | 'ghost' | 'destructive'
 type Size = 'default' | 'sm' | 'lg'
 
 const props = withDefaults(defineProps<{ variant?: Variant; size?: Size }>(), {
@@ -13,18 +13,20 @@ const props = withDefaults(defineProps<{ variant?: Variant; size?: Size }>(), {
 })
 
 const buttonVariants = cva(
-  'inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-lg text-sm font-medium transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
-        default: 'bg-primary text-bg hover:opacity-90',
-        outline: 'border border-border bg-transparent hover:bg-surface-2',
-        ghost: 'hover:bg-surface-2',
+        default: 'bg-primary text-bg shadow-sm hover:bg-primary-hover active:scale-[0.98]',
+        secondary: 'bg-surface-2 text-fg hover:bg-surface-3',
+        outline: 'border border-border bg-transparent text-fg hover:bg-surface-2',
+        ghost: 'text-muted hover:bg-surface-2 hover:text-fg',
+        destructive: 'bg-status-missing text-primary hover:bg-status-missing/90',
       },
       size: {
-        default: 'h-9 px-4',
-        sm: 'h-8 px-3 text-xs',
-        lg: 'h-11 px-6',
+        default: 'h-11 px-4',
+        sm: 'h-10 px-3 text-xs',
+        lg: 'h-12 px-6',
       },
     },
     defaultVariants: { variant: 'default', size: 'default' },

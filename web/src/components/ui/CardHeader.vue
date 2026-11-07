@@ -1,1 +1,1 @@
-<template><header class="space-y-1 p-5 pb-3"><slot /></header></template>
+<template><header class="flex items-start justify-between gap-3 p-5 pb-4"><slot /></header></template>
