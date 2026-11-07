@@ -8,9 +8,10 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from csx import __version__
 from csx.api.deps import COOKIE_NAME
@@ -97,5 +98,17 @@ def health_root() -> dict:
     return ok({"status": "up", "version": __version__})
 
 
+class SPAStaticFiles(StaticFiles):
+    """前端用 history 路由，未知路径回退到 index.html。"""
+
+    async def get_response(self, path: str, scope: Any) -> Response:
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code == 404:
+                return await super().get_response("index.html", scope)
+            raise
+
+
 if settings.web_dist.is_dir():
-    app.mount("/", StaticFiles(directory=settings.web_dist, html=True), name="web")
+    app.mount("/", SPAStaticFiles(directory=settings.web_dist, html=True), name="web")
