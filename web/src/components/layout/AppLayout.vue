@@ -12,7 +12,7 @@ const sidebarCompact = ref(false)
 <template>
   <div class="min-h-dvh bg-bg text-fg">
     <Sidebar :open="drawerOpen" @close="drawerOpen = false" @compact-change="sidebarCompact = $event" />
-    <div class="min-h-dvh transition-[padding] duration-200" :class="sidebarCompact ? 'lg:pl-16' : 'lg:pl-60'">
+    <div class="min-h-dvh transition-[padding] duration-200" :class="sidebarCompact ? 'lg:pl-16' : 'lg:pl-64'">
       <Topbar @menu="drawerOpen = true" />
       <main class="mx-auto w-full max-w-[1400px] px-4 pb-12 pt-6 sm:px-6 lg:px-8">
         <RouterView />

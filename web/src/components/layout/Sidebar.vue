@@ -66,8 +66,8 @@ function toggleCompact() {
     @click="$emit('close')"
   />
   <aside
-    class="fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-border bg-bg/95 shadow-xl transition-all duration-200 lg:translate-x-0"
-    :class="[open ? 'translate-x-0' : '-translate-x-full', compact ? 'lg:w-16' : 'lg:w-60']"
+    class="fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-border bg-bg/95 shadow-xl transition-all duration-200 lg:translate-x-0"
+    :class="[open ? 'translate-x-0' : '-translate-x-full', compact ? 'lg:w-16' : 'lg:w-64']"
   >
     <!-- Logo 区域：极简、舒展 -->
     <div class="flex h-14 items-center gap-2.5 border-b border-border/60 px-4">
@@ -75,7 +75,7 @@ function toggleCompact() {
         CS
       </div>
       <div v-if="!compact || open" class="min-w-0 flex-1">
-        <p class="truncate text-sm font-semibold tracking-tight text-fg">CloudSubscribeX</p>
+        <p class="whitespace-nowrap text-sm font-semibold tracking-tight text-fg">CloudSubscribeX</p>
       </div>
       <button
         class="ml-auto grid h-8 w-8 place-items-center rounded-md text-subtle hover:bg-surface hover:text-fg lg:hidden"
