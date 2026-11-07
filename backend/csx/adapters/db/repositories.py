@@ -174,6 +174,19 @@ class SqlAlchemyTaskRepository:
         self.session.flush()
         return dst
 
+    def get(self, task_id: int) -> dict | None:
+        row = self.session.get(TransferTask, task_id)
+        if row is None:
+            return None
+        return {
+            "id": row.id,
+            "idempotency_key": row.idempotency_key,
+            "resource_id": row.resource_id,
+            "state": row.state,
+            "attempt": row.attempt,
+            "last_error": row.last_error,
+        }
+
     def due(self, now: datetime, limit: int = 100) -> list[dict]:
         rows = self.session.scalars(
             select(TransferTask)

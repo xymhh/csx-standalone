@@ -1,0 +1,87 @@
+"""Quark vendor driver adapter. Vendor imports stay inside this boundary."""
+
+from __future__ import annotations
+
+from urllib.parse import quote
+
+from csx.ports.drive import CloudFile, ShareFile, ShareStatus, TransferOutcome
+
+
+class QuarkDriveAdapter:
+    provider = "quark"
+
+    def __init__(self, share_service, files_service):
+        self.share = share_service
+        self.files = files_service
+        self._known = {}
+
+    @staticmethod
+    def _share_url(share_url: str, password: str) -> str:
+        return f"{share_url} 提取码:{quote(password, safe='')}" if password else share_url
+
+    def check_share(self, share_url: str, password: str = "") -> ShareStatus:
+        status = self.share.check_share_status(self._share_url(share_url, password))
+        error = str(getattr(status, "error_message", "") or "")
+        return ShareStatus(bool(getattr(status, "is_valid", False)), error, "提取码" in error)
+
+    def list_share_files(self, share_url: str, password: str = "") -> list[ShareFile]:
+        result = []
+        for item in self.share.list_share_files(self._share_url(share_url, password)):
+            result.append(
+                ShareFile(
+                    str(item.get("id", "")),
+                    str(item.get("name", "")),
+                    int(item.get("size", 0) or 0),
+                    str(item.get("sha1", "")),
+                    str(item.get("relative_path", item.get("name", ""))),
+                )
+            )
+        return result
+
+    def transfer(self, share_url, target_dir, *, file_ids, password="", rename_map=None):
+        succeeded, failed = self.share.transfer_files_batch(
+            self._share_url(share_url, password), list(file_ids), target_dir
+        )
+        files = self.files.list_files_recursive(target_dir)
+        self._known.update({str(item.id): (item, target_dir) for item in files})
+        created = [
+            (
+                str(item.id),
+                f"{target_dir.rstrip('/')}/{item.name}",
+                int(item.size or 0),
+                str(item.sha1 or ""),
+            )
+            for item in files
+            if not item.is_directory
+        ]
+        ok = len(succeeded) == len(file_ids) and not failed
+        return TransferOutcome(
+            ok,
+            [str(item) for item in failed],
+            created,
+            "" if not failed else "部分夸克文件转存失败",
+        )
+
+    def move(self, file_id: str, target_dir: str) -> None:
+        known = self._known.get(str(file_id))
+        item = known[0] if known else None
+        moved = self.files.move_file(item, target_dir, item.name) if item else None
+        if moved is None:
+            raise RuntimeError(f"夸克移动文件失败: {file_id}")
+        self._known[str(file_id)] = (moved, target_dir)
+
+    def rename(self, file_id: str, new_name: str) -> None:
+        known = self._known.get(str(file_id))
+        item, path = known if known else (None, "")
+        if item is None or not self.files.rename_file(path, item, new_name):
+            raise RuntimeError(f"夸克重命名失败: {file_id}")
+        self._known[str(file_id)] = (item, path)
+
+    def list_dir(self, path: str) -> list[CloudFile]:
+        items = self.files.list_files_recursive(path)
+        self._known.update({str(item.id): (item, path) for item in items})
+        return [
+            CloudFile(str(item.id), item.name, path, int(item.size or 0), str(item.sha1 or ""))
+            for item in items
+            if not item.is_directory
+        ]

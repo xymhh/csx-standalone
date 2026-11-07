@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     cors_origins: list[str] = ["http://localhost:5173"]
     web_dist: Path = Path("web/dist")
+    transfer_root: str = "CSX"
+    library_root: str = ""
 
     # 鉴权
     admin_user: str = "admin"
