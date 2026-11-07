@@ -13,3 +13,8 @@ node_modules/
 dist/
 # 会话级便签（根级模式，勿用 *_TODO.md 以免误伤 docs/）
 /*_TODO.md
+
+# Python
+.venv/
+*.egg-info/
+.pytest_cache/

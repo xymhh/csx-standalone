@@ -8,7 +8,7 @@
 
 ## test/ 测试证据
 
-（待补）
+- 2026-11-07 P0 验收：后端 `pytest` 2 passed / `ruff check` 干净 / `ruff format --check` 18 文件已格式化；前端 `vue-tsc --noEmit` 通过 / `vite build` 产出 89 kB JS + 9.6 kB CSS；本地 uvicorn 起服，`/health`、`/api/v1/meta`、`/`（前端）三个端点均 200
 
 ## summary/ 总结与复盘
 

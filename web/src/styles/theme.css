@@ -1,0 +1,30 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* 语义化主题变量：替换旧 tokens.css，页面里禁止再写裸色值 */
+@theme {
+  --color-bg: oklch(0.17 0.012 264);
+  --color-surface: oklch(0.21 0.014 264);
+  --color-surface-2: oklch(0.25 0.016 264);
+  --color-border: oklch(0.32 0.016 264);
+  --color-fg: oklch(0.96 0.004 264);
+  --color-muted: oklch(0.68 0.012 264);
+  --color-primary: oklch(0.72 0.15 250);
+
+  --color-status-waiting: oklch(0.72 0.12 90);
+  --color-status-transferred: oklch(0.7 0.13 200);
+  --color-status-ready: oklch(0.72 0.15 155);
+  --color-status-missing: oklch(0.68 0.19 25);
+  --color-status-downloading: oklch(0.74 0.14 280);
+  --color-status-failed: oklch(0.62 0.2 20);
+  --color-status-skipped: oklch(0.6 0.02 264);
+
+  --radius-card: 0.75rem;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+}

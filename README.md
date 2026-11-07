@@ -2,7 +2,20 @@
 
 把 `CloudSubscribeX`（原 MoviePilot 插件）重做成**不依赖 MoviePilot** 的独立项目：自有后端、自有 UI、重新设计的架构与界面。
 
-> 状态：立项盘点阶段，尚未写码。
+> 状态：**P0 骨架完成**（2026-11-07）——后端 `pytest` 全绿 + `ruff` 干净，前端 `typecheck` + `build` 通过，单容器可跑。
+
+## 快速开始
+
+```bash
+# 后端（http://127.0.0.1:8000）
+cd backend && pip install -e ".[dev]" && uvicorn csx.api.main:app --reload
+
+# 前端（http://127.0.0.1:5173，已配 /api 代理）
+cd web && npm install --include=dev && npm run dev
+
+# 单容器
+docker compose up --build
+```
 
 ## 为什么要有这个项目
 
