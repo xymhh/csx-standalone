@@ -116,6 +116,47 @@ def execute_transfer(session, task_row, *, drives, repos, settings) -> dict:
                 "error": "task already running",
             }
         _transition(repos, task_id, TaskState.RUNNING)
+        if resource.get("manual_transfer"):
+            current = repos.tasks.get(task_id) if hasattr(repos.tasks, "get") else {}
+            current_attempt = int((current or {}).get("attempt", task_row.get("attempt", 1)))
+            _take_token(provider)
+            try:
+                status = drive.check_share(share_url, str(resource.get("password", "")))
+                if not status.valid:
+                    error = status.error or "分享失效"
+                    next_state = _retry_or_dead_letter(repos, task_id, current_attempt, error)
+                    return {
+                        "ok": False,
+                        "task_id": task_id,
+                        "state": next_state.value,
+                        "error": error,
+                    }
+                outcome = drive.transfer(
+                    share_url,
+                    str(resource["target_dir"]),
+                    file_ids=[str(file_id) for file_id in resource["file_ids"]],
+                    password=str(resource.get("password", "")),
+                )
+            except Exception as error:
+                next_state = _retry_or_dead_letter(repos, task_id, current_attempt, str(error))
+                return {
+                    "ok": False,
+                    "task_id": task_id,
+                    "state": next_state.value,
+                    "error": str(error),
+                }
+            if not outcome.ok:
+                error = outcome.error or "部分文件转存失败"
+                next_state = _retry_or_dead_letter(repos, task_id, current_attempt, error)
+                return {"ok": False, "task_id": task_id, "state": next_state.value, "error": error}
+            _transition(repos, task_id, TaskState.SUCCEEDED)
+            return {
+                "ok": True,
+                "task_id": task_id,
+                "manual": True,
+                "target_dir": str(resource["target_dir"]),
+                "created": outcome.created,
+            }
         if upgrade_decision and upgrade_decision.action is not UpgradeAction.UPGRADE:
             _transition(repos, task_id, TaskState.CANCELLED, upgrade_decision.action.value)
             ignore = getattr(repos, "ignore_resource", None)

@@ -17,7 +17,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from csx import __version__
 from csx.api.deps import COOKIE_NAME
 from csx.api.envelope import fail, ok
-from csx.api.routes import auth, health, p6, resources, sources, system, tg
+from csx.api.routes import auth, drives, health, p6, resources, sources, system, tg
 from csx.application.auth import session_user
 from csx.infra.bootstrap import ensure_admin, init_db
 from csx.infra.checkin_runtime import scheduled_checkin
@@ -130,6 +130,7 @@ app.include_router(p6.strm, prefix="/api/v1")
 app.include_router(system.router, prefix="/api/v1")
 app.include_router(sources.router, prefix="/api/v1")
 app.include_router(tg.router, prefix="/api/v1")
+app.include_router(drives.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["meta"])

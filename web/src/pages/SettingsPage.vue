@@ -5,6 +5,7 @@ import { Plus, RefreshCw, Trash2, KeyRound, Code2, Sliders, QrCode, Search } fro
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
 import Dialog from '@/components/ui/Dialog.vue'
+import DirectorySelectDialog from '@/components/dialogs/DirectorySelectDialog.vue'
 import Input from '@/components/ui/Input.vue'
 import Select from '@/components/ui/Select.vue'
 import Switch from '@/components/ui/Switch.vue'
@@ -47,6 +48,9 @@ const sourceValues = ref<Record<string, Record<string, unknown>>>({})
 const selectedSourceId = ref('')
 const sourceTest = ref<{ valid: boolean; elapsed_ms: number; message: string } | null>(null)
 const sourceTestRunning = ref(false)
+const directoryDialogOpen = ref(false)
+const directoryTarget = ref<'transfer' | 'mount'>('transfer')
+const directoryAccountId = ref<number | null>(null)
 
 const sourceDisplayNames: Record<string, string> = {
   pansou: 'PanSou', mikan: 'Mikan', piratebay: '海盗湾', hdhive: 'HDHive', dian115: '点115',
@@ -392,6 +396,16 @@ async function testAccount(id: number) {
     toast(cause instanceof Error ? cause.message : '检测失败', 'error')
   }
 }
+
+function browseDirectory(target: 'transfer' | 'mount') {
+  directoryTarget.value = target
+  directoryDialogOpen.value = true
+}
+
+function applyDirectory(path: string) {
+  if (directoryTarget.value === 'transfer') form.value.transfer_root = path
+  else form.value.local_mount_root = path
+}
 </script>
 
 <template>
@@ -593,8 +607,9 @@ async function testAccount(id: number) {
               <label class="text-sm font-medium text-fg">网盘转存保存目录</label>
               <p class="text-xs text-muted mt-0.5">存入网盘时的根文件夹名称</p>
             </div>
-            <div class="w-full sm:w-48">
+            <div class="flex w-full gap-2 sm:w-80">
               <Input v-model="form.transfer_root" placeholder="例如 CSX" />
+              <Button variant="outline" size="sm" @click="browseDirectory('transfer')">📂 浏览</Button>
             </div>
           </div>
 
@@ -648,8 +663,9 @@ async function testAccount(id: number) {
               <label class="text-sm font-medium text-fg">本地挂载根路径</label>
               <p class="text-xs text-muted mt-0.5">网盘通过工具挂载到服务器本地的文件目录路径</p>
             </div>
-            <div class="w-full sm:w-60">
+            <div class="flex w-full gap-2 sm:w-80">
               <Input v-model="form.local_mount_root" placeholder="例如 /mnt/quark" />
+              <Button variant="outline" size="sm" @click="browseDirectory('mount')">📂 浏览</Button>
             </div>
           </div>
 
@@ -849,6 +865,15 @@ async function testAccount(id: number) {
         </Button>
       </div>
     </Dialog>
+
+    <DirectorySelectDialog
+      :open="directoryDialogOpen"
+      :accounts="accounts"
+      :account-id="directoryAccountId"
+      @close="directoryDialogOpen = false"
+      @select="applyDirectory"
+      @update:account-id="directoryAccountId = $event"
+    />
 
     <Dialog :open="open" :title="editing ? '修改网盘账号' : '绑定网盘账号'" @close="open = false">
       <form class="space-y-4" @submit.prevent="submitAccount">

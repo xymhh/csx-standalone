@@ -12,6 +12,7 @@ class ShareStatus:
     valid: bool
     error: str = ""
     password_required: bool = False
+    share_title: str = ""
 
 
 @dataclass(frozen=True)
@@ -21,6 +22,7 @@ class ShareFile:
     size: int = 0
     sha1: str = ""
     path: str = ""
+    is_dir: bool = False
 
 
 @dataclass(frozen=True)
@@ -30,6 +32,14 @@ class CloudFile:
     path: str
     size: int = 0
     sha1: str = ""
+
+
+@dataclass(frozen=True)
+class CloudDirectory:
+    directory_id: str
+    name: str
+    path: str
+    has_children: bool = False
 
 
 @dataclass(frozen=True)
@@ -62,3 +72,5 @@ class DrivePort(Protocol):
     def rename(self, file_id: str, new_name: str) -> None: ...
 
     def list_dir(self, path: str) -> list[CloudFile]: ...
+
+    def list_directories(self, parent_id: str = "") -> list[CloudDirectory]: ...

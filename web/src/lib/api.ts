@@ -63,9 +63,11 @@ export interface MediaRef { tmdb_id: number | null; title: string; type: string 
 export interface Subscription { id: number; media_id: number; scope: Record<string, unknown>; quality_pref: Record<string, unknown>; state: string; source: string; created_at: string; updated_at: string; media?: MediaRef }
 export interface Candidate { id: number; subscription_id: number; provider: string; share_url: string; state: string; score: number; payload: Record<string, unknown>; created_at: string }
 export interface Task { id: number; subscription_id: number; resource_id: number; idempotency_key: string; state: string; attempt: number; next_retry_at: string | null; last_error: string | null; created_at: string; updated_at: string }
-export interface ProgressEpisode { episode: number; title: string | null; air_date: string | null; aired: boolean; owned: boolean; file: { path: string; size: number; sha1: string; quality_bucket: string } | null }
+export interface ProgressEpisode { episode: number; title: string | null; air_date: string | null; aired: boolean; owned: boolean; file: { file_id: number; path: string; size: number; sha1: string | null; quality_bucket: string; created_at: string } | null }
 export interface ProgressSeason { season: number; episodes: ProgressEpisode[] }
-export interface ProgressItem { media_id: number; title: string; aired_count: number; owned_count: number; missing: { season: number; episode: number }[]; seasons: ProgressSeason[] }
+export interface ProgressItem { media_id: number; title: string; type?: string; year?: number | null; overview?: string; poster_url?: string; rating?: number | null; aired_count: number; owned_count: number; missing: { season: number; episode: number }[]; seasons: ProgressSeason[] }
+export interface DriveFolder { id: string; name: string; path: string; has_children: boolean }
+export interface ShareInspectFile { id: string; name: string; size: number; is_dir: boolean }
 export interface LibraryFile { id: number; media_id: number; path: string; size: number; sha1: string; quality_bucket: string; created_at: string }
 export interface LibraryServer { provider: string; configured: boolean; valid: boolean | null }
 export interface Account { id: number; provider: string; name: string; has_credential: boolean; masked: string }
@@ -110,6 +112,11 @@ export const subscriptionsApi = {
   sync: (id: number) => api<{ triggered: boolean; task_id: string; message: string }>(`/api/v1/subscriptions/${id}/sync`, { method: 'POST' }),
 }
 export const progressApi = { overview: () => api<ProgressItem[]>('/api/v1/progress'), getDetail: (id: number) => api<ProgressItem>(`/api/v1/progress/${id}`) }
+export const drivesApi = {
+  folders: (accountId: number, parentId = '') => api<DriveFolder[]>(`/api/v1/drives/${accountId}/folders${qs({ parent_id: parentId })}`),
+  inspectShare: (body: { provider: '115' | 'quark' | 'auto'; share_url: string; password?: string }) => api<{ provider: string; share_title: string; files: ShareInspectFile[] }>('/api/v1/drives/share/inspect', { method: 'POST', body: JSON.stringify(body) }),
+  transferShare: (body: { account_id: number; share_url: string; password?: string; file_ids: string[]; target_dir: string; media_id?: number }) => api<{ task_id: number; state: string }>('/api/v1/drives/share/transfer', { method: 'POST', body: JSON.stringify(body) }),
+}
 export const candidatesApi = {
   list: (params: PageQuery & { subscription_id?: number; state?: string } = {}) => api<Candidate[]>(`/api/v1/candidates${qs(params)}`),
   accept: (id: number) => api<{ candidate_id: number; task_id: number; state: string }>(`/api/v1/candidates/${id}/accept`, { method: 'POST' }),

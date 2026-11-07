@@ -5,10 +5,12 @@ import { ChevronDown, ChevronUp, Film } from '@lucide/vue'
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
 import EpisodeMatrix from '@/components/domain/EpisodeMatrix.vue'
+import MediaDrawer from '@/components/domain/MediaDrawer.vue'
 import { progressApi, type ProgressItem } from '@/lib/api'
 
 const items = ref<ProgressItem[]>([])
 const expanded = ref<Record<number, boolean>>({})
+const drawerMediaId = ref<number | null>(null)
 
 onMounted(async () => {
   items.value = await progressApi.overview()
@@ -36,15 +38,16 @@ function toggle(id: number) {
 
     <!-- 剧集卡片流：单个卡片，不套娃 -->
     <div class="space-y-3">
-      <div
-        v-for="media in items"
+        <div
+          v-for="media in items"
         :key="media.media_id"
         class="rounded-xl border border-border/60 bg-surface/40 p-4 transition-colors hover:border-border/90"
+        :id="`media-${media.media_id}`"
       >
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2.5">
-              <h3 class="truncate text-sm font-semibold text-fg">{{ media.title }}</h3>
+              <button class="min-h-11 truncate text-left text-sm font-semibold text-fg hover:text-primary" @click="drawerMediaId = media.media_id">{{ media.title }}</button>
               <Badge :tone="media.missing.length ? 'warn' : 'good'">
                 {{ media.missing.length ? `缺 ${media.missing.length} 集` : '全集已入库' }}
               </Badge>
@@ -78,5 +81,6 @@ function toggle(id: number) {
         </div>
       </div>
     </div>
+    <MediaDrawer :open="drawerMediaId !== null" :media-id="drawerMediaId" @close="drawerMediaId = null" />
   </div>
 </template>

@@ -15,6 +15,7 @@ import {
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
 import TaskRow from '@/components/domain/TaskRow.vue'
+import MediaDrawer from '@/components/domain/MediaDrawer.vue'
 import { useEvents } from '@/composables/useEvents'
 import { useToast } from '@/composables/useToast'
 import {
@@ -31,6 +32,7 @@ const report = ref<DoctorReport | null>(null)
 const items = ref<ProgressItem[]>([])
 const tasks = ref<Task[]>([])
 const error = ref('')
+const drawerMediaId = ref<number | null>(null)
 
 async function load() {
   try {
@@ -147,7 +149,7 @@ const runningTasksCount = () => tasks.value.filter((t) => t.state === 'running')
               class="flex items-center justify-between py-2.5 first:pt-0 last:pb-0"
             >
               <div class="min-w-0 flex-1 pr-4">
-                <p class="truncate text-xs font-medium text-fg">{{ media.title }}</p>
+                <button class="min-h-11 truncate text-left text-xs font-medium text-fg hover:text-primary" @click="drawerMediaId = media.media_id">{{ media.title }}</button>
                 <div class="mt-1 flex items-center gap-2">
                   <div class="h-1.5 w-24 overflow-hidden rounded-full bg-surface-2">
                     <div
@@ -223,5 +225,6 @@ const runningTasksCount = () => tasks.value.filter((t) => t.state === 'running')
         </div>
       </section>
     </div>
+    <MediaDrawer :open="drawerMediaId !== null" :media-id="drawerMediaId" @close="drawerMediaId = null" />
   </div>
 </template>

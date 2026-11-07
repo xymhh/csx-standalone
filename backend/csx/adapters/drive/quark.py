@@ -5,7 +5,7 @@ from __future__ import annotations
 import posixpath
 from urllib.parse import quote
 
-from csx.ports.drive import CloudFile, ShareFile, ShareStatus, TransferOutcome
+from csx.ports.drive import CloudDirectory, CloudFile, ShareFile, ShareStatus, TransferOutcome
 
 
 class QuarkDriveAdapter:
@@ -15,6 +15,7 @@ class QuarkDriveAdapter:
         self.share = share_service
         self.files = files_service
         self._known = {}
+        self._directory_paths = {"0": "/"}
 
     @staticmethod
     def _share_url(share_url: str, password: str) -> str:
@@ -23,7 +24,13 @@ class QuarkDriveAdapter:
     def check_share(self, share_url: str, password: str = "") -> ShareStatus:
         status = self.share.check_share_status(self._share_url(share_url, password))
         error = str(getattr(status, "error_message", "") or "")
-        return ShareStatus(bool(getattr(status, "is_valid", False)), error, "提取码" in error)
+        share_info = getattr(status, "share_info", {}) or {}
+        return ShareStatus(
+            bool(getattr(status, "is_valid", False)),
+            error,
+            "提取码" in error,
+            str(share_info.get("share_title") or ""),
+        )
 
     def list_share_files(self, share_url: str, password: str = "") -> list[ShareFile]:
         result = []
@@ -35,6 +42,7 @@ class QuarkDriveAdapter:
                     int(item.get("size", 0) or 0),
                     str(item.get("sha1", "")),
                     str(item.get("relative_path", item.get("name", ""))),
+                    bool(item.get("is_dir") or item.get("is_directory")),
                 )
             )
         return result
@@ -96,3 +104,15 @@ class QuarkDriveAdapter:
             for item in items
             if not item.is_directory
         ]
+
+    def list_directories(self, parent_id: str = "") -> list[CloudDirectory]:
+        parent_id = str(parent_id or "0")
+        parent_path = self._directory_paths.get(parent_id, "/")
+        directories = [item for item in self.files._list(parent_id) if item.is_directory]
+        result = []
+        for item in directories:
+            path = posixpath.join(parent_path, item.name)
+            self._directory_paths[item.id] = path
+            has_children = any(child.is_directory for child in self.files._list(item.id))
+            result.append(CloudDirectory(item.id, item.name, path, has_children))
+        return result

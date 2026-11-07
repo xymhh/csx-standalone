@@ -142,6 +142,25 @@ class TransferTask(Base):
     )
 
 
+class ManualTransfer(Base):
+    """Provider-specific payload for a standalone queued share transfer."""
+
+    __tablename__ = "manual_transfer"
+
+    task_id: Mapped[int] = mapped_column(
+        ForeignKey("transfer_task.id", ondelete="CASCADE"), primary_key=True
+    )
+    account_id: Mapped[int] = mapped_column(ForeignKey("account.id"), nullable=False)
+    share_url: Mapped[str] = mapped_column(Text, nullable=False)
+    password: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    file_ids: Mapped[str] = mapped_column(Text, nullable=False)
+    target_dir: Mapped[str] = mapped_column(Text, nullable=False)
+    media_id: Mapped[int | None] = mapped_column(ForeignKey("media_item.id"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+
 class LibraryFile(Base):
     __tablename__ = "library_file"
     __table_args__ = (UniqueConstraint("episode_id", "path"),)

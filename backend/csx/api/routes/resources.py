@@ -472,10 +472,12 @@ def _media_progress(db: Session, media: MediaItem) -> dict:
                     "owned": file_row is not None,
                     "file": (
                         {
+                            "file_id": file_row.id,
                             "path": file_row.path,
                             "size": file_row.size,
                             "sha1": file_row.sha1,
                             "quality_bucket": file_row.quality_bucket,
+                            "created_at": file_row.created_at,
                         }
                         if file_row
                         else None
@@ -486,6 +488,11 @@ def _media_progress(db: Session, media: MediaItem) -> dict:
     return {
         "media_id": media.id,
         "title": media.title,
+        "type": media.type,
+        "year": media.year,
+        "overview": media.overview,
+        "poster_url": media.poster_url,
+        "rating": getattr(media, "rating", None),
         "aired_count": aired,
         "owned_count": owned,
         "missing": missing,

@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { Menu, Search } from '@lucide/vue'
 
-import Badge from '@/components/ui/Badge.vue'
+import ManualTransferDialog from '@/components/dialogs/ManualTransferDialog.vue'
 import { useEvents } from '@/composables/useEvents'
 
 defineEmits<{ menu: [] }>()
@@ -23,6 +23,7 @@ const titles: Record<string, string> = {
 }
 
 const { connected } = useEvents()
+const manualTransferOpen = ref(false)
 const title = computed(() => titles[route.path] ?? '控制台')
 </script>
 
@@ -31,6 +32,7 @@ const title = computed(() => titles[route.path] ?? '控制台')
     class="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border/60 bg-bg/80 px-4 backdrop-blur-md sm:px-6 lg:px-8"
   >
     <div class="flex items-center gap-3">
+      <button class="min-h-11 rounded-lg bg-primary px-3 text-xs font-semibold text-bg shadow-sm transition hover:bg-primary-hover sm:px-4 sm:text-sm" @click="manualTransferOpen = true">+ 快捷转存</button>
       <button
         class="grid h-8 w-8 place-items-center rounded-md text-subtle hover:bg-surface hover:text-fg lg:hidden"
         aria-label="打开菜单"
@@ -58,4 +60,5 @@ const title = computed(() => titles[route.path] ?? '控制台')
       </RouterLink>
     </div>
   </header>
+  <ManualTransferDialog :open="manualTransferOpen" @close="manualTransferOpen = false" />
 </template>

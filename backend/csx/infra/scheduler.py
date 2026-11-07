@@ -214,7 +214,11 @@ class TaskScheduler:
     def _resource_for_task(self, row: dict) -> dict:
         with self.session_factory() as db:
             repos = SqlAlchemyTransferRepositories(db)
-            resource = repos.get_resource(row["resource_id"])
+            resource = (
+                repos.get_resource(row["resource_id"])
+                if row.get("resource_id") is not None
+                else repos.get_manual_transfer(int(row["id"]))
+            )
             return resource or {}
 
     def _task_is_runnable(self, task_id: int) -> bool:
@@ -229,7 +233,11 @@ class TaskScheduler:
                 db,
                 lambda task_id, old, new, error: transitions.append((task_id, old, new, error)),
             )
-            resource = repos.get_resource(row["resource_id"])
+            resource = (
+                repos.get_resource(row["resource_id"])
+                if row.get("resource_id") is not None
+                else repos.get_manual_transfer(int(row["id"]))
+            )
             provider = str((resource or {}).get("provider", "")).lower()
             if provider and provider not in self.drives:
                 self.drives.update(DriveRegistry.from_session(db))
@@ -246,6 +254,7 @@ class TaskScheduler:
                     TaskState.RETRY_WAIT.value,
                 )
             task_row = dict(row)
+            task_row["resource"] = resource
             result = execute_transfer(
                 db,
                 task_row,

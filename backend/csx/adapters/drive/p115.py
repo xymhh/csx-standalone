@@ -5,7 +5,7 @@ from __future__ import annotations
 import posixpath
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from csx.ports.drive import CloudFile, ShareFile, ShareStatus, TransferOutcome
+from csx.ports.drive import CloudDirectory, CloudFile, ShareFile, ShareStatus, TransferOutcome
 
 
 class P115DriveAdapter:
@@ -15,6 +15,7 @@ class P115DriveAdapter:
         self.share = share_service
         self.files = files_service
         self._known = {}
+        self._directory_paths = {"0": "/"}
 
     @staticmethod
     def _share_url(share_url: str, password: str) -> str:
@@ -31,7 +32,10 @@ class P115DriveAdapter:
         status = self.share.check_share_status(self._share_url(share_url, password))
         error = str(getattr(status, "error_message", "") or "")
         return ShareStatus(
-            bool(getattr(status, "is_valid", False)), error, "提取码" in error or "密码" in error
+            bool(getattr(status, "is_valid", False)),
+            error,
+            "提取码" in error or "密码" in error,
+            str((getattr(status, "share_info", {}) or {}).get("share_title") or ""),
         )
 
     def list_share_files(self, share_url: str, password: str = "") -> list[ShareFile]:
@@ -43,6 +47,7 @@ class P115DriveAdapter:
                 int(item.get("size", 0) or 0),
                 str(item.get("sha1", "")),
                 str(item.get("relative_path", item.get("name", ""))),
+                bool(item.get("is_dir") or item.get("is_directory")),
             )
             for item in items
         ]
@@ -104,3 +109,23 @@ class P115DriveAdapter:
             for item in items
             if not item.is_directory
         ]
+
+    def list_directories(self, parent_id: str = "") -> list[CloudDirectory]:
+        parent_id = str(parent_id or "0")
+        parent_path = self._directory_paths.get(parent_id, "/")
+        checked, items = self.files.manager.list_files_by_cid_checked(parent_id)
+        if not checked:
+            raise RuntimeError(f"列出115目录失败：{parent_path}")
+        result = []
+        for item in items:
+            if not bool(item.get("is_dir")):
+                continue
+            directory_id = str(item.get("cid") or item.get("id") or item.get("file_id") or "")
+            name = str(item.get("name") or item.get("n") or item.get("file_name") or "")
+            path = posixpath.join(parent_path, name)
+            self._directory_paths[directory_id] = path
+            child_checked, children = self.files.manager.list_files_by_cid_checked(directory_id)
+            result.append(
+                CloudDirectory(directory_id, name, path, bool(child_checked and children))
+            )
+        return result

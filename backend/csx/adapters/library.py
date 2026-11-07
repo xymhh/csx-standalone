@@ -9,9 +9,11 @@ from sqlalchemy.orm import Session
 
 from csx.adapters.db.repositories import SqlAlchemyTaskRepository
 from csx.infra.models import (
+    Account,
     DiscoveredResource,
     Episode,
     LibraryFile,
+    ManualTransfer,
     MediaItem,
     Season,
     Subscription,
@@ -129,6 +131,23 @@ class SqlAlchemyTransferRepositories:
             ),
             "idempotency_key": row.idempotency_key,
             "upgrade_enabled": bool(upgrade_enabled),
+        }
+
+    def get_manual_transfer(self, task_id: int) -> dict | None:
+        row = self.session.get(ManualTransfer, task_id)
+        if row is None:
+            return None
+        account = self.session.get(Account, row.account_id)
+        if account is None:
+            return None
+        return {
+            "manual_transfer": True,
+            "provider": account.provider,
+            "share_url": row.share_url,
+            "password": row.password,
+            "file_ids": json.loads(row.file_ids),
+            "target_dir": row.target_dir,
+            "media_id": row.media_id,
         }
 
     def ignore_resource(self, resource_id: int, state: str) -> None:
