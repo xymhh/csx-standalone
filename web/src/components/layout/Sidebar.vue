@@ -49,13 +49,13 @@ function toggleCompact() {
     @click="$emit('close')"
   />
   <aside
-    class="fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-border bg-bg/95 shadow-2xl shadow-black/30 backdrop-blur-md transition-all duration-200 lg:translate-x-0"
-    :class="[open ? 'translate-x-0' : '-translate-x-full', compact ? 'lg:w-20' : 'lg:w-60']"
+    class="fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-border bg-bg/95 shadow-2xl shadow-black/30 backdrop-blur-md transition-all duration-200 lg:translate-x-0"
+    :class="[open ? 'translate-x-0' : '-translate-x-full', compact ? 'lg:w-20' : 'lg:w-64']"
   >
     <div class="flex min-h-16 items-center gap-3 border-b border-border px-4">
       <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-zinc-100 text-sm font-bold text-zinc-900 shadow-sm shadow-primary/10">CS</span>
-      <div v-if="!compact || open" class="min-w-0">
-        <p class="truncate text-sm font-semibold tracking-tight">CloudSubscribeX</p>
+      <div v-if="!compact || open" class="min-w-0 flex-1">
+        <p class="text-sm font-semibold tracking-tight text-fg whitespace-nowrap">CloudSubscribeX</p>
         <p class="text-xs text-muted">媒体自动化控制台</p>
       </div>
       <button
