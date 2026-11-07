@@ -15,5 +15,13 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:5173"]
     web_dist: Path = Path("web/dist")
 
+    # 鉴权
+    admin_user: str = "admin"
+    admin_password: str = ""
+    cookie_secure: bool = False
+    session_ttl_days: int = 7
+    login_max_attempts: int = 5
+    login_window_seconds: int = 900
+
 
 settings = Settings()

@@ -1,11 +1,4 @@
-from fastapi.testclient import TestClient
-
-from csx.api.main import app
-
-client = TestClient(app)
-
-
-def test_health_ok() -> None:
+def test_health_ok(client) -> None:
     resp = client.get("/health")
     assert resp.status_code == 200
     body = resp.json()
@@ -13,10 +6,9 @@ def test_health_ok() -> None:
     assert body["data"]["status"] == "up"
 
 
-def test_meta_has_version() -> None:
+def test_meta_requires_login(client) -> None:
     resp = client.get("/api/v1/meta")
-    assert resp.status_code == 200
+    assert resp.status_code == 401
     body = resp.json()
-    assert body["data"]["name"] == "CloudSubscribeX"
-    assert body["data"]["version"]
-    assert body["error"] is None
+    assert body["ok"] is False
+    assert body["error"]["code"] == "UNAUTHORIZED"
