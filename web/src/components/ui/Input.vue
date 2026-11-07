@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 
 const props = withDefaults(
   defineProps<{
-    modelValue?: string
+    modelValue?: string | number
     type?: string
     placeholder?: string
     autocomplete?: string
@@ -16,7 +16,7 @@ const props = withDefaults(
   { type: 'text', modelValue: '' },
 )
 
-const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
+const emit = defineEmits<{ 'update:modelValue': [value: any] }>()
 
 const classes = computed(() =>
   cn(

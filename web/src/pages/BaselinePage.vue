@@ -1,18 +1,27 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { Plus, RefreshCw, Trash2, Pause, Play, Film } from '@lucide/vue'
+import { Plus, RefreshCw, Trash2, Pause, Play, Film, SlidersHorizontal } from '@lucide/vue'
 
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
 import Dialog from '@/components/ui/Dialog.vue'
 import Input from '@/components/ui/Input.vue'
+import Select from '@/components/ui/Select.vue'
 import { useToast } from '@/composables/useToast'
 import { subscriptionsApi, type Subscription } from '@/lib/api'
 
 const rows = ref<Subscription[]>([])
 const open = ref(false)
-const tmdb = ref('')
 const { toast } = useToast()
+
+// 表单字段
+const title = ref('')
+const mediaType = ref('tv')
+const year = ref<number | undefined>(new Date().getFullYear())
+const seasonNumber = ref(1)
+const episodeCount = ref(12)
+const tmdbId = ref<number | undefined>(undefined)
+const showAdvanced = ref(false)
 
 async function load() {
   rows.value = await subscriptionsApi.list()
@@ -22,11 +31,23 @@ onMounted(load)
 
 async function create() {
   try {
-    await subscriptionsApi.create({ tmdb_id: Number(tmdb.value) })
+    if (!title.value.trim()) {
+      toast('请输入影视片名', 'error')
+      return
+    }
+    await subscriptionsApi.create({
+      title: title.value.trim(),
+      media_type: mediaType.value,
+      year: year.value || undefined,
+      season_number: mediaType.value === 'tv' ? seasonNumber.value : 1,
+      episode_count: mediaType.value === 'tv' ? episodeCount.value : 1,
+      tmdb_id: tmdbId.value || undefined,
+    })
     open.value = false
-    tmdb.value = ''
+    title.value = ''
+    tmdbId.value = undefined
     await load()
-    toast('已添加追剧订阅', 'success')
+    toast('追剧订阅已添加！系统已开始全网找源', 'success')
   } catch (cause) {
     toast(cause instanceof Error ? cause.message : '添加失败', 'error')
   }
@@ -66,7 +87,7 @@ async function sync(id: number) {
     <div v-if="!rows.length" class="rounded-2xl border border-dashed border-border bg-surface/40 p-12 text-center text-sm text-muted">
       <Film class="mx-auto mb-3 h-8 w-8 text-muted" />
       <p class="font-medium text-fg">你的追剧清单还是空的</p>
-      <p class="mt-1 text-xs text-muted">点击右上角「添加追剧」，输入影视编号或名称即可开始全自动追更。</p>
+      <p class="mt-1 text-xs text-muted">点击右上角「添加追剧」，输入片名即可全自动追更。</p>
     </div>
 
     <div class="grid gap-3.5 md:grid-cols-2 xl:grid-cols-3">
@@ -74,7 +95,7 @@ async function sync(id: number) {
         <div class="flex items-start justify-between">
           <div>
             <h3 class="font-semibold text-fg">{{ row.media?.title ?? `影视 #${row.media_id}` }}</h3>
-            <p class="mt-1 text-xs text-muted">来源：{{ row.source }} · 编号 #{{ row.id }}</p>
+            <p class="mt-1 text-xs text-muted">类型：{{ row.media?.type === 'movie' ? '电影' : '电视剧' }} · 编号 #{{ row.id }}</p>
           </div>
           <Badge :tone="row.state === 'active' ? 'good' : 'muted'" :pulse="row.state === 'active'">
             {{ row.state === 'active' ? '正在追更' : '已暂停' }}
@@ -97,14 +118,63 @@ async function sync(id: number) {
       </article>
     </div>
 
-    <Dialog :open="open" title="添加追剧" @close="open = false">
+    <!-- 全新大白话添加追剧弹窗 -->
+    <Dialog :open="open" title="添加追更订阅" @close="open = false">
       <form class="space-y-4" @submit.prevent="create">
         <label class="block space-y-1.5 text-sm">
-          <span class="font-medium text-fg">TMDB 影视编号</span>
-          <Input v-model="tmdb" type="number" min="1" required placeholder="例如：12345" />
-          <span class="text-xs text-muted">输入电视剧或电影在 TMDB 的 ID 编号，系统将自动拉取剧集元数据</span>
+          <span class="font-medium text-fg">影视名称</span>
+          <Input v-model="title" required placeholder="例如：庆余年、边水往事、死侍" />
+          <span class="text-xs text-muted">直接输入中文或英文片名</span>
         </label>
-        <Button type="submit" class="w-full">立即添加并开始监控</Button>
+
+        <div class="grid grid-cols-2 gap-3">
+          <label class="block space-y-1.5 text-sm">
+            <span class="font-medium text-fg">类型</span>
+            <Select
+              v-model="mediaType"
+              :options="[
+                { value: 'tv', label: '电视剧 / 动漫 / 综艺' },
+                { value: 'movie', label: '电影' },
+              ]"
+            />
+          </label>
+          <label class="block space-y-1.5 text-sm">
+            <span class="font-medium text-fg">上映年份 (可选)</span>
+            <Input v-model.number="year" type="number" min="1900" max="2100" placeholder="例如 2024" />
+          </label>
+        </div>
+
+        <!-- 电视剧专属季数与集数设置 -->
+        <div v-if="mediaType === 'tv'" class="grid grid-cols-2 gap-3 p-3 rounded-lg border border-border/60 bg-surface-2/30">
+          <label class="block space-y-1 text-xs">
+            <span class="text-muted">追更季数</span>
+            <Input v-model.number="seasonNumber" type="number" min="1" max="100" />
+          </label>
+          <label class="block space-y-1 text-xs">
+            <span class="text-muted">预计总集数</span>
+            <Input v-model.number="episodeCount" type="number" min="1" max="1000" />
+          </label>
+        </div>
+
+        <!-- 高级选填折叠 -->
+        <div>
+          <button
+            type="button"
+            class="flex items-center gap-1.5 text-xs text-muted hover:text-fg"
+            @click="showAdvanced = !showAdvanced"
+          >
+            <SlidersHorizontal class="h-3 w-3" />
+            <span>{{ showAdvanced ? '收起高级选项' : '高级选项 (可选 TMDB ID)' }}</span>
+          </button>
+          <div v-if="showAdvanced" class="mt-2 pt-2 border-t border-border/40">
+            <label class="block space-y-1 text-xs">
+              <span class="text-muted">TMDB ID (选填)</span>
+              <Input v-model.number="tmdbId" type="number" placeholder="例如 94954" />
+            </label>
+          </div>
+        </div>
+
+        <Button type="submit" class="w-full">立即添加并开始全网找源</Button>
       </form>
     </Dialog>
   </div>

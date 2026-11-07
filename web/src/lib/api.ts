@@ -106,7 +106,18 @@ const qs = (values: object) => { const q = new URLSearchParams(); Object.entries
 export const subscriptionsApi = {
   list: (params: PageQuery & { state?: string; keyword?: string } = {}) => api<Subscription[]>(`/api/v1/subscriptions${qs(params)}`),
   get: (id: number) => api<Subscription & { matches?: Candidate[] }>(`/api/v1/subscriptions/${id}`),
-  create: (body: { media_id?: number; tmdb_id?: number; scope?: Record<string, unknown>; quality_pref?: Record<string, unknown> | string; source?: string }) => api<Subscription>('/api/v1/subscriptions', { method: 'POST', body: JSON.stringify(body) }),
+  create: (body: {
+    media_id?: number
+    tmdb_id?: number
+    title?: string
+    media_type?: string
+    year?: number
+    season_number?: number
+    episode_count?: number
+    scope?: Record<string, unknown>
+    quality_pref?: Record<string, unknown> | string
+    source?: string
+  }) => api<Subscription>('/api/v1/subscriptions', { method: 'POST', body: JSON.stringify(body) }),
   update: (id: number, body: { state?: string; scope?: Record<string, unknown>; quality_pref?: Record<string, unknown> | string }) => api<Subscription>(`/api/v1/subscriptions/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: (id: number) => api<{ deleted: boolean }>(`/api/v1/subscriptions/${id}`, { method: 'DELETE' }),
   sync: (id: number) => api<{ triggered: boolean; task_id: string; message: string }>(`/api/v1/subscriptions/${id}/sync`, { method: 'POST' }),

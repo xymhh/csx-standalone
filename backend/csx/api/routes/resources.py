@@ -72,6 +72,11 @@ def _page(db: Session, query, page: int, page_size: int):
 class SubscriptionIn(BaseModel):
     media_id: int | None = Field(default=None, gt=0)
     tmdb_id: int | None = Field(default=None, gt=0)
+    title: str | None = None
+    media_type: str = Field(default="tv")
+    year: int | None = None
+    season_number: int = Field(default=1, ge=1)
+    episode_count: int = Field(default=12, ge=1)
     scope: dict[str, Any] = Field(default_factory=dict)
     quality_pref: dict[str, Any] | str = Field(default_factory=dict)
     source: str = Field(default="manual", min_length=1, max_length=64)
@@ -147,10 +152,43 @@ def list_subscriptions(
 @subscriptions.post("")
 def create_subscription(body: SubscriptionIn, db: Session = Depends(get_db)):
     media = db.get(MediaItem, body.media_id) if body.media_id else None
-    if body.tmdb_id:
+    if media is None and body.tmdb_id:
         media = db.scalar(select(MediaItem).where(MediaItem.tmdb_id == body.tmdb_id))
+
+    # 若媒体未入库，根据片名或 TMDB ID 自动建立媒体、季与集记录
     if media is None:
-        _raise(404, "MEDIA_NOT_FOUND", "媒体不存在")
+        title = (body.title or "").strip()
+        if not title:
+            if body.tmdb_id:
+                title = f"影视 TMDB-{body.tmdb_id}"
+            else:
+                _raise(400, "TITLE_REQUIRED", "请提供影视片名或有效的媒体编号")
+
+        m_type = "movie" if body.media_type == "movie" else "tv"
+        media = MediaItem(
+            title=title,
+            type=m_type,
+            year=body.year,
+            tmdb_id=body.tmdb_id,
+        )
+        db.add(media)
+        db.flush()
+
+        if m_type == "tv":
+            season_num = max(1, body.season_number)
+            ep_count = max(1, body.episode_count)
+            season = Season(media_id=media.id, season_number=season_num, episode_count=ep_count)
+            db.add(season)
+            db.flush()
+            for ep_i in range(1, ep_count + 1):
+                db.add(Episode(season_id=season.id, episode_number=ep_i, title=f"第 {ep_i} 集"))
+        else:
+            season = Season(media_id=media.id, season_number=1, episode_count=1)
+            db.add(season)
+            db.flush()
+            db.add(Episode(season_id=season.id, episode_number=1, title="正片"))
+        db.flush()
+
     row = Subscription(
         media_id=media.id,
         scope=SubscriptionScope.from_json(body.scope).to_json(),
