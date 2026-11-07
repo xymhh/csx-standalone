@@ -1,0 +1,15 @@
+# 运行时与敏感
+data/
+config.json
+*.db
+*.db-shm
+*.db-wal
+*.log
+.env
+__pycache__/
+*.pyc
+.ruff_cache/
+node_modules/
+dist/
+# 会话级便签（根级模式，勿用 *_TODO.md 以免误伤 docs/）
+/*_TODO.md
