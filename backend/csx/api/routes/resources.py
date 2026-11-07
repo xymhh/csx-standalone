@@ -8,7 +8,7 @@ import shutil
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from csx.adapters.drive.registry import DriveRegistry
 from csx.adapters.library import SqlAlchemyLibraryRepository
 from csx.adapters.media.emby import server_clients
 from csx.api.envelope import ok
@@ -91,6 +92,17 @@ class AccountIn(BaseModel):
 class AccountPatch(BaseModel):
     credential: str | None = Field(default=None, min_length=1)
     name: str | None = Field(default=None, min_length=1, max_length=128)
+
+
+class QrcodeStartRequest(BaseModel):
+    provider: Literal["115", "quark"]
+
+
+class QrcodeCheckRequest(BaseModel):
+    provider: Literal["115", "quark"]
+    token_data: dict[str, Any]
+    name: str = Field(default="我的115账号", min_length=1, max_length=128)
+    auto_save: bool = True
 
 
 def _quality_json(value: dict | str) -> str:
@@ -620,6 +632,65 @@ def _account_data(row: Account) -> dict:
         "has_credential": bool(row.credential),
         "masked": "***" if row.credential else "",
     }
+
+
+@accounts.post("/qrcode/start")
+def start_account_qrcode(body: QrcodeStartRequest):
+    try:
+        return ok(DriveRegistry.create_qrcode(body.provider))
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "QRCODE_START_FAILED", "message": str(error)},
+        ) from error
+
+
+@accounts.post("/qrcode/check")
+def check_account_qrcode(
+    body: QrcodeCheckRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    try:
+        result = DriveRegistry.check_qrcode(body.provider, body.token_data)
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "QRCODE_CHECK_FAILED", "message": str(error)},
+        ) from error
+
+    status = result["status"]
+    account_data = None
+    if status == "success":
+        cookie = result.get("cookie")
+        if not cookie:
+            raise HTTPException(
+                status_code=502,
+                detail={"code": "QRCODE_COOKIE_MISSING", "message": "扫码成功但未获得账号凭据"},
+            )
+        if body.auto_save:
+            if not body.name.strip():
+                _raise(422, "INVALID_ACCOUNT_NAME", "账号备注名称不能为空")
+            if db.scalar(select(Account).where(Account.provider == body.provider)) is not None:
+                _raise(409, "ACCOUNT_EXISTS", "该网盘类型已有绑定账号，请先删除或更换现有账号")
+            try:
+                encrypted = encrypt_credential(cookie)
+            except RuntimeError as error:
+                _raise(503, "SECRET_KEY_REQUIRED", str(error))
+            account = Account(provider=body.provider, name=body.name.strip(), credential=encrypted)
+            db.add(account)
+            db.commit()
+            db.refresh(account)
+            account_data = _account_data(account)
+            getattr(request.app.state, "drives", {}).pop(body.provider, None)
+
+    return ok(
+        {
+            "status": status,
+            "message": "绑定成功" if status == "success" and body.auto_save else result["message"],
+            "account": account_data,
+        }
+    )
 
 
 @accounts.get("")

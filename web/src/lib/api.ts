@@ -70,6 +70,8 @@ export interface LibraryFile { id: number; media_id: number; path: string; size:
 export interface LibraryServer { provider: string; configured: boolean; valid: boolean | null }
 export interface Account { id: number; provider: string; name: string; has_credential: boolean; masked: string }
 export interface AccountTest { valid: boolean; provider: string; message: string }
+export interface QrcodeStartResponse { provider: '115' | 'quark'; qrcode: string; token_data: Record<string, string>; hint: string }
+export interface QrcodeCheckResponse { status: 'waiting' | 'scanned' | 'success' | 'expired'; message: string; account: Account | null }
 export interface DoctorReport { database?: { ok: boolean; size_bytes: number; error: string }; accounts?: Array<Record<string, unknown>>; scheduler?: { running: boolean; active_workers: number; waiting_queue_depth: number }; disk?: Record<string, unknown> }
 export type SettingSection = 'baseline' | 'sources' | 'transfer' | 'strm' | 'notify' | 'advanced'
 export type Settings = Record<SettingSection, Record<string, unknown>>
@@ -94,5 +96,13 @@ export const tasksApi = { list: (params: PageQuery & { state?: string } = {}) =>
 export const historyApi = { list: (params: PageQuery & { provider?: string; start?: string; end?: string; state?: string } = {}) => api<Task[]>(`/api/v1/history${qs(params)}`), retryBatch: (ids: number[]) => api<{ retried: number[] }>('/api/v1/history/retry_batch', { method: 'POST', body: JSON.stringify(ids) }) }
 export const libraryApi = { listFiles: (params: PageQuery & { media_id?: number } = {}) => api<LibraryFile[]>(`/api/v1/library/files${qs(params)}`), getServers: () => api<LibraryServer[]>('/api/v1/library/servers') }
 export const settingsApi = { getAll: () => api<Settings>('/api/v1/settings'), getSection: (section: SettingSection) => api<Record<string, unknown>>(`/api/v1/settings/${section}`), updateSection: (section: SettingSection, body: Record<string, unknown>) => api<Record<string, unknown>>(`/api/v1/settings/${section}`, { method: 'PUT', body: JSON.stringify(body) }), testProvider: (provider: string) => api<AccountTest>(`/api/v1/settings/test/${encodeURIComponent(provider)}`, { method: 'POST' }) }
-export const accountsApi = { list: () => api<Account[]>('/api/v1/accounts'), create: (body: { provider: string; credential: string; name: string }) => api<Account>('/api/v1/accounts', { method: 'POST', body: JSON.stringify(body) }), update: (id: number, body: { credential?: string; name?: string }) => api<Account>(`/api/v1/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }), delete: (id: number) => api<{ deleted: boolean }>(`/api/v1/accounts/${id}`, { method: 'DELETE' }), test: (id: number) => api<AccountTest>(`/api/v1/accounts/${id}/test`, { method: 'POST' }) }
+export const accountsApi = {
+  list: () => api<Account[]>('/api/v1/accounts'),
+  create: (body: { provider: string; credential: string; name: string }) => api<Account>('/api/v1/accounts', { method: 'POST', body: JSON.stringify(body) }),
+  update: (id: number, body: { credential?: string; name?: string }) => api<Account>(`/api/v1/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  delete: (id: number) => api<{ deleted: boolean }>(`/api/v1/accounts/${id}`, { method: 'DELETE' }),
+  test: (id: number) => api<AccountTest>(`/api/v1/accounts/${id}/test`, { method: 'POST' }),
+  startQrcode: (provider: '115' | 'quark') => api<QrcodeStartResponse>('/api/v1/accounts/qrcode/start', { method: 'POST', body: JSON.stringify({ provider }) }),
+  checkQrcode: (body: { provider: '115' | 'quark'; token_data: Record<string, string>; name: string; auto_save: boolean }) => api<QrcodeCheckResponse>('/api/v1/accounts/qrcode/check', { method: 'POST', body: JSON.stringify(body) }),
+}
 export const doctorApi = { diagnose: () => api<DoctorReport>('/api/v1/doctor') }

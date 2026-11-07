@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { Plus, RefreshCw, Trash2, KeyRound, Check, HelpCircle, Code2, Sliders } from '@lucide/vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { Plus, RefreshCw, Trash2, KeyRound, Code2, Sliders, QrCode } from '@lucide/vue'
 
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
@@ -10,7 +10,7 @@ import Select from '@/components/ui/Select.vue'
 import Switch from '@/components/ui/Switch.vue'
 import Tabs from '@/components/ui/Tabs.vue'
 import { useToast } from '@/composables/useToast'
-import { accountsApi, settingsApi, type Account, type SettingSection } from '@/lib/api'
+import { accountsApi, ApiError, settingsApi, type Account, type QrcodeStartResponse, type SettingSection } from '@/lib/api'
 
 const sections: { value: SettingSection; label: string; desc: string }[] = [
   { value: 'baseline', label: '追剧规则', desc: '配置默认检查更新的时间范围与剧集元数据语言' },
@@ -31,6 +31,16 @@ const editing = ref<Account | null>(null)
 const provider = ref('115')
 const name = ref('')
 const credential = ref('')
+const qrOpen = ref(false)
+const qrProvider = ref<'115' | 'quark'>('115')
+const qrName = ref('我的115账号')
+const qrData = ref<QrcodeStartResponse | null>(null)
+const qrStatus = ref<'idle' | 'starting' | 'waiting' | 'scanned' | 'success' | 'expired' | 'error'>('idle')
+const qrMessage = ref('选择网盘并生成二维码后，用手机 App 扫码确认。')
+const qrStarting = ref(false)
+let qrPollTimer: number | undefined
+let qrCheckInFlight = false
+let qrGeneration = 0
 const { toast } = useToast()
 
 // 图形化表单内部响应式状态
@@ -115,6 +125,105 @@ async function load() {
 
 onMounted(load)
 watch(section, loadSettings)
+
+watch(qrProvider, (provider, previous) => {
+  const defaultName = previous === '115' ? '我的115账号' : '我的夸克账号'
+  if (qrName.value === defaultName) {
+    qrName.value = provider === '115' ? '我的115账号' : '我的夸克账号'
+  }
+})
+
+function stopQrcodePolling() {
+  if (qrPollTimer !== undefined) {
+    window.clearInterval(qrPollTimer)
+    qrPollTimer = undefined
+  }
+}
+
+function closeQrcode() {
+  qrGeneration += 1
+  stopQrcodePolling()
+  qrOpen.value = false
+  qrData.value = null
+  qrStatus.value = 'idle'
+  qrStarting.value = false
+}
+
+async function pollQrcode() {
+  if (!qrData.value || qrCheckInFlight || !qrOpen.value) return
+  const generation = qrGeneration
+  const session = qrData.value
+  qrCheckInFlight = true
+  try {
+    const result = await accountsApi.checkQrcode({
+      provider: session.provider,
+      token_data: session.token_data,
+      name: qrName.value.trim(),
+      auto_save: true,
+    })
+    if (generation !== qrGeneration) return
+    qrStatus.value = result.status
+    qrMessage.value = result.status === 'waiting'
+      ? '等待扫码…'
+      : result.status === 'scanned'
+        ? '已扫码，等待手机端确认…'
+        : result.message
+    if (result.status === 'expired') {
+      stopQrcodePolling()
+      return
+    }
+    if (result.status === 'success' && result.account) {
+      stopQrcodePolling()
+      toast('绑定成功', 'success')
+      closeQrcode()
+      await loadAccounts()
+    }
+  } catch (cause) {
+    if (generation !== qrGeneration) return
+    if (cause instanceof ApiError && (cause.status === 409 || cause.status === 503)) {
+      stopQrcodePolling()
+      qrStatus.value = 'error'
+      qrMessage.value = cause.message
+    } else {
+      qrMessage.value = '状态检测暂时失败，正在重试…'
+    }
+  } finally {
+    qrCheckInFlight = false
+  }
+}
+
+async function startQrcode() {
+  qrGeneration += 1
+  stopQrcodePolling()
+  qrData.value = null
+  qrStatus.value = 'starting'
+  qrStarting.value = true
+  qrMessage.value = '正在生成安全登录二维码…'
+  try {
+    qrData.value = await accountsApi.startQrcode(qrProvider.value)
+    qrStatus.value = 'waiting'
+    qrMessage.value = '等待扫码…'
+    qrPollTimer = window.setInterval(() => void pollQrcode(), 2000)
+  } catch (cause) {
+    qrStatus.value = 'error'
+    qrMessage.value = cause instanceof Error ? cause.message : '二维码生成失败'
+  } finally {
+    qrStarting.value = false
+  }
+}
+
+function openQrcodeDialog() {
+  qrGeneration += 1
+  stopQrcodePolling()
+  qrProvider.value = '115'
+  qrName.value = '我的115账号'
+  qrOpen.value = true
+  qrData.value = null
+  qrStatus.value = 'idle'
+  qrMessage.value = '选择网盘并生成二维码后，用手机 App 扫码确认。'
+}
+
+onUnmounted(stopQrcodePolling)
 
 // 组合表单数据提交
 async function save() {
@@ -540,22 +649,25 @@ async function testAccount(id: number) {
           <h3 class="text-base font-semibold text-fg">我的网盘账号</h3>
           <p class="mt-0.5 text-xs text-muted">绑定你的 115 或夸克网盘，转存的影视将直接保存到你的网盘中</p>
         </div>
-        <Button @click="openAdd" class="flex items-center gap-2">
-          <Plus class="h-4 w-4" />
-          <span>绑定新网盘</span>
-        </Button>
+        <div class="flex flex-wrap gap-2">
+          <Button @click="openQrcodeDialog">📱 扫码绑定网盘</Button>
+          <Button variant="outline" @click="openAdd">
+            <Plus class="h-4 w-4" />
+            <span>手动绑定</span>
+          </Button>
+        </div>
       </div>
 
       <div v-if="!accounts.length" class="surface-card p-8 text-center text-sm text-muted">
         <KeyRound class="mx-auto mb-2 h-6 w-6 text-muted" />
-        <p>尚未绑定任何网盘账号。点击右上角「绑定新网盘」添加一个吧。</p>
+        <p>尚未绑定任何网盘账号。可使用手机扫码，或手动添加凭据。</p>
       </div>
 
       <div class="grid gap-3 sm:grid-cols-2">
         <article
           v-for="account in accounts"
           :key="account.id"
-          class="surface-card flex items-center justify-between gap-3 p-4 transition-all hover:border-zinc-700"
+          class="surface-card flex items-center justify-between gap-3 p-4 transition-all hover:border-surface-3"
         >
           <div class="min-w-0">
             <div class="flex items-center gap-2">
@@ -571,13 +683,63 @@ async function testAccount(id: number) {
               <RefreshCw class="mr-1 h-3.5 w-3.5" />
               检测连通
             </Button>
-            <Button variant="ghost" size="sm" class="text-rose-400 hover:text-rose-300" @click="removeAccount(account.id)">
+            <Button variant="ghost" size="sm" class="text-status-missing hover:text-status-missing/80" @click="removeAccount(account.id)">
               <Trash2 class="h-3.5 w-3.5" />
             </Button>
           </div>
         </article>
       </div>
     </section>
+
+    <Dialog :open="qrOpen" title="扫码绑定网盘" @close="closeQrcode">
+      <div class="space-y-4">
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="space-y-1.5 text-sm">
+            <span class="text-xs text-muted">网盘类型</span>
+            <Select
+              v-model="qrProvider"
+              :disabled="qrStatus === 'waiting' || qrStatus === 'scanned' || qrStarting"
+              :options="[
+                { value: '115', label: '115 网盘' },
+                { value: 'quark', label: '夸克网盘' },
+              ]"
+            />
+          </label>
+          <label class="space-y-1.5 text-sm">
+            <span class="text-xs text-muted">账号备注</span>
+            <Input v-model="qrName" :disabled="qrStatus === 'waiting' || qrStatus === 'scanned'" maxlength="128" />
+          </label>
+        </div>
+
+        <div class="flex min-h-64 flex-col items-center justify-center rounded-xl border border-border bg-bg/70 p-5 text-center">
+          <img
+            v-if="qrData?.qrcode"
+            :src="qrData.qrcode"
+            :alt="`${qrData.provider} 网盘登录二维码`"
+            class="h-52 w-52 rounded-lg bg-white p-2 shadow-xl shadow-black/30"
+          />
+          <div v-else class="max-w-xs space-y-2 text-sm text-muted">
+            <QrCode class="mx-auto h-9 w-9 text-subtle" />
+            <p>生成二维码后，使用对应网盘 App 扫描并在手机上确认登录。</p>
+          </div>
+          <div class="mt-4 space-y-2">
+            <Badge :tone="qrStatus === 'success' ? 'good' : qrStatus === 'scanned' ? 'info' : qrStatus === 'expired' || qrStatus === 'error' ? 'bad' : 'warn'" :pulse="qrStatus === 'waiting' || qrStatus === 'scanned'">
+              {{ qrStatus === 'scanned' ? '已扫码，待确认' : qrStatus === 'waiting' ? '等待扫码' : qrStatus === 'expired' ? '二维码已失效' : qrStatus === 'error' ? '绑定未完成' : qrStatus === 'starting' ? '正在生成' : qrStatus === 'success' ? '绑定成功' : '准备扫码' }}
+            </Badge>
+            <p class="text-xs text-muted">{{ qrMessage }}</p>
+            <p v-if="qrData?.hint" class="text-xs text-subtle">{{ qrData.hint }}</p>
+          </div>
+        </div>
+
+        <Button
+          class="w-full"
+          :disabled="qrStarting || qrStatus === 'waiting' || qrStatus === 'scanned'"
+          @click="startQrcode"
+        >
+          {{ qrStatus === 'waiting' || qrStatus === 'scanned' ? '二维码已生成' : qrData || qrStatus === 'error' ? '重新生成二维码' : qrStarting ? '正在生成…' : '生成二维码' }}
+        </Button>
+      </div>
+    </Dialog>
 
     <Dialog :open="open" :title="editing ? '修改网盘账号' : '绑定网盘账号'" @close="open = false">
       <form class="space-y-4" @submit.prevent="submitAccount">

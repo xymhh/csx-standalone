@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+from base64 import b64encode
+from io import BytesIO
 
 from sqlalchemy.orm import Session
 
@@ -11,6 +13,84 @@ from csx.infra.models import Account
 
 
 class DriveRegistry:
+    @staticmethod
+    def create_qrcode(provider: str) -> dict:
+        """Create a provider QR login session and normalize its browser payload."""
+        provider = provider.strip().lower()
+        if provider == "115":
+            from csx.vendor.drive.p115.client import P115ClientManager
+
+            result = P115ClientManager.create_qrcode_login("alipaymini")
+            token_data = {
+                key: str(result.get(key) or "") for key in ("uid", "time", "sign", "client_type")
+            }
+            qrcode_image = str(result.get("qrcode") or "")
+            if not qrcode_image.startswith("data:image/png;base64,"):
+                raise RuntimeError("115未返回有效二维码图片")
+            if not all(token_data.values()):
+                raise RuntimeError("115未返回完整二维码登录参数")
+            return {
+                "provider": "115",
+                "qrcode": qrcode_image,
+                "token_data": token_data,
+                "hint": "请使用 115 App 或支付宝扫一扫",
+            }
+        if provider == "quark":
+            import qrcode
+
+            from csx.vendor.drive.quark.client import QuarkClient
+
+            result = QuarkClient.create_qrcode_login()
+            token = str(result.get("qr_token") or "")
+            qr_url = str(result.get("qr_url") or "")
+            if not token or not qr_url:
+                raise RuntimeError("夸克未返回完整二维码登录参数")
+            image = qrcode.make(qr_url)
+            output = BytesIO()
+            image.save(output, format="PNG")
+            return {
+                "provider": "quark",
+                "qrcode": "data:image/png;base64," + b64encode(output.getvalue()).decode("ascii"),
+                "token_data": {"qr_token": token},
+                "hint": "请使用夸克 App 扫描二维码",
+            }
+        raise ValueError(f"unsupported QR login provider: {provider}")
+
+    @staticmethod
+    def check_qrcode(provider: str, token_data: dict) -> dict:
+        """Poll a provider QR session and expose only the normalized status/cookie."""
+        provider = provider.strip().lower()
+        if provider == "115":
+            from csx.vendor.drive.p115.client import P115ClientManager
+
+            result = P115ClientManager.check_qrcode_login(
+                uid=str(token_data.get("uid") or ""),
+                qrcode_time=str(token_data.get("time") or ""),
+                sign=str(token_data.get("sign") or ""),
+                client_type=str(token_data.get("client_type") or "alipaymini"),
+            )
+        elif provider == "quark":
+            from csx.vendor.drive.quark.client import QuarkClient
+
+            result = QuarkClient.check_qrcode_login(qr_token=str(token_data.get("qr_token") or ""))
+        else:
+            raise ValueError(f"unsupported QR login provider: {provider}")
+
+        raw_status = str(result.get("status") or "waiting").lower()
+        if raw_status == "cancelled":
+            status = "expired"
+        elif raw_status in {"waiting", "scanned", "success", "expired"}:
+            status = raw_status
+        else:
+            status = "waiting"
+        return {
+            "status": status,
+            "message": str(result.get("message") or "等待扫码"),
+            "cookie": str(result["cookie"])
+            if status == "success" and result.get("cookie")
+            else None,
+        }
+
     @staticmethod
     def build(provider: str, credential: str) -> object:
         provider = provider.lower()
