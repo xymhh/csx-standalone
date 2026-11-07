@@ -1,55 +1,82 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { ChevronDown, ChevronUp, Film } from '@lucide/vue'
 
-import EpisodeMatrix from '@/components/domain/EpisodeMatrix.vue'
-import MediaCard from '@/components/domain/MediaCard.vue'
+import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
+import EpisodeMatrix from '@/components/domain/EpisodeMatrix.vue'
 import { progressApi, type ProgressItem } from '@/lib/api'
 
 const items = ref<ProgressItem[]>([])
-const selected = ref<number | null>(null)
-const layout = ref<'grid' | 'list'>('grid')
+const expanded = ref<Record<number, boolean>>({})
 
 onMounted(async () => {
   items.value = await progressApi.overview()
 })
+
+function toggle(id: number) {
+  expanded.value[id] = !expanded.value[id]
+}
 </script>
 
 <template>
   <div class="space-y-6">
-    <div class="flex flex-wrap items-center justify-between gap-3">
+    <div class="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <h2 class="text-2xl font-semibold tracking-tight text-fg">追剧进度</h2>
-        <p class="mt-1 text-sm text-muted">查看每一部影视的季集状态：绿色已存入网盘，红色为待转存缺集，灰色尚未播出</p>
+        <h2 class="text-xl font-semibold tracking-tight text-fg">追剧进度</h2>
+        <p class="mt-0.5 text-xs text-muted">监控关注剧集的入库情况与缺失集数</p>
       </div>
-      <div class="flex gap-2">
-        <Button variant="outline" size="sm" :class="{ 'bg-surface-2': layout === 'grid' }" @click="layout = 'grid'">网格卡片</Button>
-        <Button variant="outline" size="sm" :class="{ 'bg-surface-2': layout === 'list' }" @click="layout = 'list'">清单列表</Button>
-      </div>
+      <Badge tone="muted">共 {{ items.length }} 部关注中</Badge>
     </div>
 
-    <div v-if="!items.length" class="rounded-2xl border border-dashed border-border bg-surface/40 p-12 text-center text-sm text-muted">
-      暂无追剧进度数据。先去「我的订阅」添加一部剧吧！
+    <div v-if="!items.length" class="rounded-xl border border-dashed border-border/60 bg-surface/30 p-12 text-center text-xs text-muted">
+      <Film class="mx-auto mb-2 h-7 w-7 text-subtle/50" />
+      <p>暂无追剧进度数据。先去「我的订阅」添加一部剧吧！</p>
     </div>
 
-    <div class="grid gap-4" :class="layout === 'grid' ? 'sm:grid-cols-2 xl:grid-cols-3' : 'space-y-4'">
-      <article
+    <!-- 剧集卡片流：单个卡片，不套娃 -->
+    <div class="space-y-3">
+      <div
         v-for="media in items"
-        :id="`media-${media.media_id}`"
         :key="media.media_id"
-        class="space-y-3 rounded-2xl border border-border bg-surface p-5 transition-all hover:border-zinc-700"
+        class="rounded-xl border border-border/60 bg-surface/40 p-4 transition-colors hover:border-border/90"
       >
-        <MediaCard :media="media" />
-        <Button
-          variant="outline"
-          size="sm"
-          class="w-full"
-          @click="selected = selected === media.media_id ? null : media.media_id"
-        >
-          {{ selected === media.media_id ? '收起每集详情' : '展开查看各集状态' }}
-        </Button>
-        <EpisodeMatrix v-if="selected === media.media_id" :seasons="media.seasons" />
-      </article>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2.5">
+              <h3 class="truncate text-sm font-semibold text-fg">{{ media.title }}</h3>
+              <Badge :tone="media.missing.length ? 'warn' : 'good'">
+                {{ media.missing.length ? `缺 ${media.missing.length} 集` : '全集已入库' }}
+              </Badge>
+            </div>
+            <!-- 进度条与数字 -->
+            <div class="mt-2 flex items-center gap-3">
+              <div class="h-1.5 w-32 overflow-hidden rounded-full bg-surface-2 sm:w-48">
+                <div
+                  class="h-full bg-status-ready transition-all"
+                  :style="{
+                    width: media.aired_count ? `${Math.round((media.owned_count / media.aired_count) * 100)}%` : '0%',
+                  }"
+                />
+              </div>
+              <span class="font-mono text-xs text-subtle">
+                {{ media.owned_count }} / {{ media.aired_count }} 集
+              </span>
+            </div>
+          </div>
+
+          <!-- 展开按钮 -->
+          <Button variant="ghost" size="sm" class="text-xs text-muted hover:text-fg" @click="toggle(media.media_id)">
+            <span>{{ expanded[media.media_id] ? '收起详情' : '季集详情' }}</span>
+            <component :is="expanded[media.media_id] ? ChevronUp : ChevronDown" class="ml-1 h-3.5 w-3.5" />
+          </Button>
+        </div>
+
+        <!-- 展开后的季集矩阵 -->
+        <div v-if="expanded[media.media_id]" class="mt-4 border-t border-border/40 pt-4">
+          <EpisodeMatrix :seasons="media.seasons" />
+        </div>
+      </div>
     </div>
   </div>
 </template>

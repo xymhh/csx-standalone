@@ -5,37 +5,54 @@ import type { Task } from '@/lib/api'
 
 defineProps<{ task: Task }>()
 defineEmits<{ retry: [id: number]; cancel: [id: number] }>()
+
+const stateMap: Record<string, { label: string; tone: 'good' | 'bad' | 'warn' | 'info' | 'muted' }> = {
+  succeeded: { label: '已完成', tone: 'good' },
+  running: { label: '正在转存', tone: 'info' },
+  queued: { label: '排队中', tone: 'muted' },
+  retry_wait: { label: '等待重试', tone: 'warn' },
+  dead_letter: { label: '转存失败', tone: 'bad' },
+  cancelled: { label: '已取消', tone: 'muted' },
+}
 </script>
 
 <template>
-  <article class="surface-card flex flex-col gap-4 p-4 transition-colors hover:border-primary/15 sm:flex-row sm:items-center sm:p-5">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-border/50 bg-surface/30 p-3.5 transition-colors hover:border-border/80">
     <div class="min-w-0 flex-1">
-      <div class="flex flex-wrap items-center gap-2">
-        <strong class="font-semibold tracking-tight">任务 <span class="font-mono tabular-nums">#{{ task.id }}</span></strong>
-        <Badge :tone="task.state === 'succeeded' ? 'good' : task.state === 'dead_letter' ? 'bad' : task.state === 'retry_wait' ? 'warn' : task.state === 'running' ? 'info' : 'muted'" :pulse="task.state === 'running'">
-          {{ task.state }}
+      <div class="flex items-center gap-2">
+        <span class="text-xs font-semibold text-fg">任务 #{{ task.id }}</span>
+        <Badge :tone="stateMap[task.state]?.tone ?? 'muted'" :pulse="task.state === 'running'">
+          {{ stateMap[task.state]?.label ?? task.state }}
         </Badge>
+        <span v-if="task.attempt > 1" class="font-mono text-[11px] text-subtle">
+          第 {{ task.attempt }} 次尝试
+        </span>
       </div>
-      <p class="mt-2 truncate font-mono text-xs text-muted" :title="task.idempotency_key">
+      <p class="mt-1 truncate font-mono text-[11px] text-subtle" :title="task.idempotency_key">
         {{ task.idempotency_key }}
       </p>
-      <p v-if="task.last_error" class="mt-2 text-sm text-status-missing">{{ task.last_error }}</p>
-      <p v-if="task.next_retry_at" class="mt-1 text-xs text-subtle">
-        下次重试：{{ new Date(task.next_retry_at).toLocaleString() }}
+      <p v-if="task.last_error" class="mt-1 text-xs text-status-missing">
+        {{ task.last_error }}
       </p>
     </div>
-    <div class="flex gap-2">
+
+    <div class="flex shrink-0 items-center gap-2">
       <Button
         v-if="task.state === 'dead_letter' || task.state === 'retry_wait'"
         variant="outline"
         size="sm"
         @click="$emit('retry', task.id)"
       >
-        提前重试
+        立即重试
       </Button>
-      <Button v-if="task.state === 'queued'" variant="outline" size="sm" @click="$emit('cancel', task.id)">
-        取消排队
+      <Button
+        v-if="task.state === 'queued'"
+        variant="ghost"
+        size="sm"
+        @click="$emit('cancel', task.id)"
+      >
+        取消
       </Button>
     </div>
-  </article>
+  </div>
 </template>
