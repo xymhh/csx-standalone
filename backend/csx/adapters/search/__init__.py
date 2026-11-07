@@ -1,1 +1,1 @@
-"""adapters/search"""
+"""Adapters that isolate search source vendor definitions."""

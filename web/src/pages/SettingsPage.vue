@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
-import { Plus, RefreshCw, Trash2, KeyRound, Code2, Sliders, QrCode } from '@lucide/vue'
+import { Plus, RefreshCw, Trash2, KeyRound, Code2, Sliders, QrCode, Search } from '@lucide/vue'
 
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
@@ -10,7 +10,7 @@ import Select from '@/components/ui/Select.vue'
 import Switch from '@/components/ui/Switch.vue'
 import Tabs from '@/components/ui/Tabs.vue'
 import { useToast } from '@/composables/useToast'
-import { accountsApi, ApiError, settingsApi, type Account, type QrcodeStartResponse, type SettingSection } from '@/lib/api'
+import { accountsApi, ApiError, searchSourcesApi, settingsApi, type Account, type QrcodeStartResponse, type SearchSourceField, type SearchSourceSchema, type SettingSection } from '@/lib/api'
 
 const sections: { value: SettingSection; label: string; desc: string }[] = [
   { value: 'baseline', label: '追剧规则', desc: '配置默认检查更新的时间范围与剧集元数据语言' },
@@ -42,6 +42,40 @@ let qrPollTimer: number | undefined
 let qrCheckInFlight = false
 let qrGeneration = 0
 const { toast } = useToast()
+const sourceSchemas = ref<SearchSourceSchema[]>([])
+const sourceValues = ref<Record<string, Record<string, unknown>>>({})
+const selectedSourceId = ref('')
+const sourceTest = ref<{ valid: boolean; elapsed_ms: number; message: string } | null>(null)
+const sourceTestRunning = ref(false)
+
+const sourceDisplayNames: Record<string, string> = {
+  pansou: 'PanSou', mikan: 'Mikan', piratebay: '海盗湾', hdhive: 'HDHive', dian115: '点115',
+  animegarden: '动漫花园', juying: '聚影', woniu: '蜗牛', pinglian: '盘链', pianku: '片库',
+  uindex: 'UIndex', seedhub: 'SeedHub', tgchannels: '频道监控', hdhaven: 'HDHaven', online_docs: '在线文档',
+}
+const selectedSource = () => sourceSchemas.value.find((item) => item.id === selectedSourceId.value)
+const editableField = (field: SearchSourceField) => !['test-source', 'account', 'hdhive-oauth'].includes(field.type)
+
+function sourceValue(sourceId: string, field: SearchSourceField): unknown {
+  return sourceValues.value[sourceId]?.[field.key] ?? field.default ?? ''
+}
+
+function setSourceValue(sourceId: string, field: SearchSourceField, value: unknown) {
+  sourceValues.value[sourceId] ??= {}
+  sourceValues.value[sourceId][field.key] = value
+}
+
+function sourceOptions(field: SearchSourceField) {
+  return (field.options ?? field.items ?? []).map((option) => ({
+    value: String(option.value),
+    label: option.label ?? option.title ?? String(option.value),
+  }))
+}
+
+function sourceMultiValue(sourceId: string, field: SearchSourceField): string[] {
+  const value = sourceValue(sourceId, field)
+  return Array.isArray(value) ? value.map(String) : []
+}
 
 // 图形化表单内部响应式状态
 const form = ref<Record<string, any>>({
@@ -77,6 +111,24 @@ const form = ref<Record<string, any>>({
 })
 
 async function loadSettings() {
+  if (section.value === 'sources') {
+    sourceSchemas.value = await searchSourcesApi.schema()
+    const nextValues: Record<string, Record<string, unknown>> = {}
+    for (const source of sourceSchemas.value) {
+      nextValues[source.id] = {}
+      for (const group of source.groups) {
+        for (const field of group.fields) nextValues[source.id][field.key] = field.value ?? field.default
+      }
+    }
+    sourceValues.value = nextValues
+    if (!sourceSchemas.value.some((item) => item.id === selectedSourceId.value)) {
+      selectedSourceId.value = sourceSchemas.value[0]?.id ?? ''
+    }
+    sourceTest.value = null
+    rawData.value = nextValues
+    rawJson.value = JSON.stringify(nextValues, null, 2)
+    return
+  }
   rawData.value = await settingsApi.getSection(section.value)
   rawJson.value = JSON.stringify(rawData.value, null, 2)
 
@@ -86,11 +138,6 @@ async function loadSettings() {
     form.value.window_days = Number(d.window_days ?? 14)
     form.value.language = String(d.language ?? 'zh-CN')
     form.value.scan_interval_seconds = Number(d.scan_interval_seconds ?? 30)
-  } else if (section.value === 'sources') {
-    form.value.pansou = Boolean(d.pansou ?? true)
-    form.value.mikan = Boolean(d.mikan ?? true)
-    form.value.piratebay = Boolean(d.piratebay ?? false)
-    form.value.search_timeout = Number(d.search_timeout ?? 15)
   } else if (section.value === 'transfer') {
     form.value.default_drive = String(d.default_drive ?? 'quark')
     form.value.transfer_root = String(d.transfer_root ?? 'CSX')
@@ -228,6 +275,12 @@ onUnmounted(stopQrcodePolling)
 // 组合表单数据提交
 async function save() {
   try {
+    if (section.value === 'sources') {
+      await searchSourcesApi.save(sourceValues.value)
+      await loadSettings()
+      toast('搜索源设置已保存', 'success')
+      return
+    }
     let payload: Record<string, unknown> = {}
 
     if (showRawJson.value) {
@@ -242,13 +295,6 @@ async function save() {
           window_days: Number(form.value.window_days),
           language: form.value.language,
           scan_interval_seconds: Number(form.value.scan_interval_seconds),
-        }
-      } else if (section.value === 'sources') {
-        payload = {
-          pansou: Boolean(form.value.pansou),
-          mikan: Boolean(form.value.mikan),
-          piratebay: Boolean(form.value.piratebay),
-          search_timeout: Number(form.value.search_timeout),
         }
       } else if (section.value === 'transfer') {
         payload = {
@@ -284,6 +330,20 @@ async function save() {
     toast('设置保存成功', 'success')
   } catch (cause) {
     toast(cause instanceof Error ? cause.message : '保存失败', 'error')
+  }
+}
+
+async function testSelectedSource() {
+  if (!selectedSourceId.value) return
+  sourceTestRunning.value = true
+  sourceTest.value = null
+  try {
+    sourceTest.value = await searchSourcesApi.test(selectedSourceId.value)
+    toast(`${sourceDisplayNames[selectedSourceId.value] ?? selectedSourceId.value}：${sourceTest.value.message}（${sourceTest.value.elapsed_ms} ms）`, sourceTest.value.valid ? 'success' : 'error')
+  } catch (cause) {
+    toast(cause instanceof Error ? cause.message : '搜索源测试失败', 'error')
+  } finally {
+    sourceTestRunning.value = false
   }
 }
 
@@ -357,6 +417,7 @@ async function testAccount(id: number) {
         </div>
         <div class="flex items-center gap-3">
           <Button
+            v-if="section !== 'sources'"
             variant="ghost"
             size="sm"
             class="text-xs text-muted hover:text-fg"
@@ -365,12 +426,12 @@ async function testAccount(id: number) {
             <component :is="showRawJson ? Sliders : Code2" class="mr-1.5 h-3.5 w-3.5" />
             {{ showRawJson ? '切回普通模式' : '代码编辑模式' }}
           </Button>
-          <Button size="sm" @click="save">保存当前设置</Button>
+          <Button size="sm" @click="save">{{ section === 'sources' ? '保存搜索源设置' : '保存当前设置' }}</Button>
         </div>
       </div>
 
       <!-- 高级 JSON 模式（默认隐藏） -->
-      <div v-if="showRawJson" class="space-y-3">
+      <div v-if="showRawJson && section !== 'sources'" class="space-y-3">
         <p class="text-xs text-muted">开发者模式：直接以 JSON 格式编辑底层字段。</p>
         <textarea
           v-model="rawJson"
@@ -425,38 +486,86 @@ async function testAccount(id: number) {
 
         <!-- 2. 搜索找源 -->
         <template v-if="section === 'sources'">
-          <div class="flex items-center justify-between gap-3 border-b border-border/50 pb-4">
-            <div>
-              <span class="text-sm font-medium text-fg">启用盘搜全网搜索 (PanSou)</span>
-              <p class="text-xs text-muted mt-0.5">全网跨网盘聚合搜索引擎，搜寻各类公开分享</p>
-            </div>
-            <Switch v-model="form.pansou" label="启用盘搜" />
-          </div>
+          <div class="grid gap-5 lg:grid-cols-[250px_minmax(0,1fr)]">
+            <nav class="max-h-[680px] space-y-1 overflow-y-auto rounded-xl border border-border/70 bg-bg/35 p-2" aria-label="搜索源列表">
+              <button
+                v-for="source in sourceSchemas"
+                :key="source.id"
+                type="button"
+                class="flex min-h-12 w-full items-center justify-between rounded-lg px-3 text-left text-sm transition-colors hover:bg-surface-2"
+                :class="selectedSourceId === source.id ? 'bg-surface-2 text-fg ring-1 ring-border' : 'text-muted'"
+                @click="selectedSourceId = source.id; sourceTest = null"
+              >
+                <span>{{ sourceDisplayNames[source.id] ?? source.name }}</span>
+                <span class="h-2 w-2 rounded-full" :class="sourceValues[source.id]?.enabled === false ? 'bg-subtle' : 'bg-status-ready shadow-[0_0_8px_var(--color-status-ready)]'"></span>
+              </button>
+              <p v-if="sourceSchemas.length === 0" class="px-3 py-4 text-xs text-muted">正在读取搜索源定义…</p>
+            </nav>
 
-          <div class="flex items-center justify-between gap-3 border-b border-border/50 pb-4">
-            <div>
-              <span class="text-sm font-medium text-fg">启用蜜柑计划 (Mikan Project)</span>
-              <p class="text-xs text-muted mt-0.5">专注动漫新番与日剧更新的字幕组资源站</p>
-            </div>
-            <Switch v-model="form.mikan" label="启用蜜柑计划" />
-          </div>
+            <div v-if="selectedSource()" class="min-w-0 space-y-5">
+              <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-surface/60 p-4">
+                <div>
+                  <h4 class="text-base font-semibold text-fg">{{ sourceDisplayNames[selectedSource()!.id] ?? selectedSource()!.name }}</h4>
+                  <p class="mt-1 text-xs text-muted">配置此搜索源的连接参数、凭据和筛选规则。</p>
+                </div>
+                <Button variant="outline" size="sm" :disabled="sourceTestRunning" @click="testSelectedSource">
+                  <Search class="mr-1.5 h-4 w-4" />
+                  {{ sourceTestRunning ? '测试中…' : '测试该搜索源' }}
+                </Button>
+              </div>
 
-          <div class="flex items-center justify-between gap-3 border-b border-border/50 pb-4">
-            <div>
-              <span class="text-sm font-medium text-fg">启用海盗湾 (ThePirateBay)</span>
-              <p class="text-xs text-muted mt-0.5">海外影视与欧美生肉资源搜索（需海外网络畅通）</p>
-            </div>
-            <Switch v-model="form.piratebay" label="启用海盗湾" />
-          </div>
+              <div v-if="sourceTest" class="rounded-lg border px-4 py-3 text-sm" :class="sourceTest.valid ? 'border-status-ready/30 bg-status-ready/10 text-status-ready' : 'border-status-missing/30 bg-status-missing/10 text-status-missing'">
+                {{ sourceTest.valid ? '连通正常' : '连通失败' }} · {{ sourceTest.message }} · {{ sourceTest.elapsed_ms }} ms
+              </div>
 
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <label class="text-sm font-medium text-fg">单站搜索超时时间</label>
-              <p class="text-xs text-muted mt-0.5">单个搜索站响应慢时的最长等待时间</p>
-            </div>
-            <div class="w-full sm:w-48 flex items-center gap-2">
-              <Input v-model.number="form.search_timeout" type="number" min="3" max="120" />
-              <span class="text-xs text-muted shrink-0">秒</span>
+              <section v-for="(group, groupIndex) in selectedSource()!.groups" :key="`${selectedSource()!.id}-${groupIndex}`" class="space-y-4 rounded-xl border border-border/70 bg-surface/40 p-4 sm:p-5">
+                <h5 class="text-sm font-semibold text-fg">{{ group.title || '基础设置' }}</h5>
+                <div class="grid gap-x-5 gap-y-4 sm:grid-cols-2">
+                  <template v-for="field in group.fields" :key="field.key">
+                    <label v-if="editableField(field) && field.type === 'switch'" class="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-border/60 px-3 py-2">
+                      <span class="text-sm text-fg">{{ field.label || field.key }}<span v-if="field.description" class="mt-0.5 block text-xs text-muted">{{ field.description }}</span></span>
+                      <Switch :model-value="Boolean(sourceValue(selectedSource()!.id, field))" :label="field.label" @update:model-value="setSourceValue(selectedSource()!.id, field, $event)" />
+                    </label>
+                    <label v-else-if="editableField(field)" class="block min-w-0 space-y-1.5" :class="field.cols === 12 ? 'sm:col-span-2' : ''">
+                      <span class="text-sm font-medium text-fg">{{ field.label || field.key }}</span>
+                      <select
+                        v-if="field.type === 'select' && sourceOptions(field).length && field.multiple"
+                        multiple
+                        :value="sourceMultiValue(selectedSource()!.id, field)"
+                        class="min-h-28 w-full rounded-lg border border-border bg-surface/80 px-3 py-2 text-sm text-fg focus-visible:border-focus focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus"
+                        @change="setSourceValue(selectedSource()!.id, field, Array.from(($event.target as HTMLSelectElement).selectedOptions).map((option) => option.value))"
+                      >
+                        <option v-for="option in sourceOptions(field)" :key="option.value" :value="option.value">{{ option.label }}</option>
+                      </select>
+                      <Select
+                        v-else-if="field.type === 'select' && sourceOptions(field).length"
+                        :model-value="String(sourceValue(selectedSource()!.id, field))"
+                        :options="sourceOptions(field)"
+                        @update:model-value="setSourceValue(selectedSource()!.id, field, $event)"
+                      />
+                      <textarea
+                        v-else-if="field.type === 'combobox' || field.type === 'textarea' || Array.isArray(field.default)"
+                        :value="Array.isArray(sourceValue(selectedSource()!.id, field)) ? sourceMultiValue(selectedSource()!.id, field).join('\n') : String(sourceValue(selectedSource()!.id, field) ?? '')"
+                        :placeholder="field.placeholder || ''"
+                        rows="3"
+                        class="w-full rounded-lg border border-border bg-surface/80 px-3 py-2 text-sm text-fg placeholder:text-subtle focus-visible:border-focus focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus"
+                        @input="setSourceValue(selectedSource()!.id, field, Array.isArray(sourceValue(selectedSource()!.id, field)) ? ($event.target as HTMLTextAreaElement).value.split('\n').map((value) => value.trim()).filter(Boolean) : ($event.target as HTMLTextAreaElement).value)"
+                      />
+                      <Input
+                        v-else
+                        :model-value="String(sourceValue(selectedSource()!.id, field) ?? '')"
+                        :type="field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text'"
+                        :placeholder="field.placeholder || ''"
+                        :min="field.min"
+                        :max="field.max"
+                        :step="field.step"
+                        @update:model-value="setSourceValue(selectedSource()!.id, field, field.type === 'number' && $event !== '' ? Number($event) : $event)"
+                      />
+                      <span v-if="field.description" class="block text-xs leading-5 text-muted">{{ field.description }}</span>
+                    </label>
+                  </template>
+                </div>
+              </section>
             </div>
           </div>
         </template>

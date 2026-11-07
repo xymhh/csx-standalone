@@ -74,6 +74,26 @@ export interface QrcodeStartResponse { provider: '115' | 'quark'; qrcode: string
 export interface QrcodeCheckResponse { status: 'waiting' | 'scanned' | 'success' | 'expired'; message: string; account: Account | null }
 export interface DoctorReport { database?: { ok: boolean; size_bytes: number; error: string }; accounts?: Array<Record<string, unknown>>; scheduler?: { running: boolean; active_workers: number; waiting_queue_depth: number }; disk?: Record<string, unknown> }
 export type SettingSection = 'baseline' | 'sources' | 'transfer' | 'strm' | 'notify' | 'advanced'
+export interface SearchSourceField {
+  key: string
+  label: string
+  type: string
+  default: unknown
+  value: unknown
+  description: string
+  hint?: string
+  placeholder?: string
+  options?: { title?: string; label?: string; value: string | number }[]
+  items?: { title?: string; label?: string; value: string | number }[]
+  min?: number
+  max?: number
+  step?: number
+  multiple?: boolean
+  cols?: number
+}
+export interface SearchSourceGroup { title: string; fields: SearchSourceField[] }
+export interface SearchSourceSchema { id: string; name: string; order: number; groups: SearchSourceGroup[] }
+export interface SearchSourceTest { valid: boolean; elapsed_ms: number; message: string }
 export type Settings = Record<SettingSection, Record<string, unknown>>
 export interface PageQuery { page?: number; page_size?: number }
 const qs = (values: object) => { const q = new URLSearchParams(); Object.entries(values).forEach(([k,v]) => { if (v !== undefined && v !== null && v !== '') q.set(k, String(v)) }); return q.size ? `?${q}` : '' }
@@ -96,6 +116,11 @@ export const tasksApi = { list: (params: PageQuery & { state?: string } = {}) =>
 export const historyApi = { list: (params: PageQuery & { provider?: string; start?: string; end?: string; state?: string } = {}) => api<Task[]>(`/api/v1/history${qs(params)}`), retryBatch: (ids: number[]) => api<{ retried: number[] }>('/api/v1/history/retry_batch', { method: 'POST', body: JSON.stringify(ids) }) }
 export const libraryApi = { listFiles: (params: PageQuery & { media_id?: number } = {}) => api<LibraryFile[]>(`/api/v1/library/files${qs(params)}`), getServers: () => api<LibraryServer[]>('/api/v1/library/servers') }
 export const settingsApi = { getAll: () => api<Settings>('/api/v1/settings'), getSection: (section: SettingSection) => api<Record<string, unknown>>(`/api/v1/settings/${section}`), updateSection: (section: SettingSection, body: Record<string, unknown>) => api<Record<string, unknown>>(`/api/v1/settings/${section}`, { method: 'PUT', body: JSON.stringify(body) }), testProvider: (provider: string) => api<AccountTest>(`/api/v1/settings/test/${encodeURIComponent(provider)}`, { method: 'POST' }) }
+export const searchSourcesApi = {
+  schema: () => api<SearchSourceSchema[]>('/api/v1/settings/sources/schema'),
+  save: (body: Record<string, Record<string, unknown>>) => api<SearchSourceSchema[]>('/api/v1/settings/sources', { method: 'PUT', body: JSON.stringify(body) }),
+  test: (sourceId: string) => api<SearchSourceTest>(`/api/v1/settings/sources/test/${encodeURIComponent(sourceId)}`, { method: 'POST' }),
+}
 export const accountsApi = {
   list: () => api<Account[]>('/api/v1/accounts'),
   create: (body: { provider: string; credential: string; name: string }) => api<Account>('/api/v1/accounts', { method: 'POST', body: JSON.stringify(body) }),
