@@ -22,7 +22,7 @@ jobs:
           ruff format --check backend
       - name: Test
         working-directory: backend
-        run: pytest -q
+        run: python -m pytest -q
 
   web:
     runs-on: ubuntu-latest
