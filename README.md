@@ -56,10 +56,10 @@ docker compose up --build
 
 - 公网：**https://csx.xymhh.eu.org**（Cloudflare 隧道 `berohost` → `http://csx-standalone:8000`）
 - 法兰克福 1Panel：容器 `csx-standalone`，内网 `http://csx-standalone:8000`（`1panel-network`，无宿主端口）
-- 代码 `/opt/csx-standalone`，compose `/opt/1panel/docker/compose/csx-standalone/docker-compose.yml`，数据卷 `csx-standalone_data:/data`
-- 发布：把仓库打包上传 1Panel `/tmp` → 一次性容器 `tar xzf` 解到 `/opt/csx-standalone` → `compose/operate` `up`（**换 image tag 才会重建**）
+- 代码 `/opt/.1panel_clash/files/b249cde255f8453fa0d2ff46f7e76f65/csx-standalone`（**与 MoviePilot 同级**；1Panel 面板里显示为 `/opt/1panel/apps/csx-standalone`），compose `/opt/1panel/docker/compose/csx-standalone/docker-compose.yml`，数据卷 `csx-standalone_data:/data`
+- 发布：上传仓库 tar 到 1Panel `/tmp` → 一次性容器 `tar xzf` 解到上面的代码目录 → 用 `docker:27-cli` 容器（挂 `docker.sock` + `/:/host`）跑 `tar c . | docker build -t csx-standalone:pN -` → `compose/operate up`。**compose 里只写 `image:`，不写 `build.context`**（该路径守护进程解析不到），详见 [路径拓扑与发布方式](docs/summary/2026-11-07-1panel路径拓扑与发布方式.md)
 
-详见 [部署记录](docs/test/2026-11-07-部署到法兰克福.md)、[管理员账户与域名记录](docs/test/2026-11-07-管理员账户与域名.md)、[P1 重建部署验证](docs/test/2026-11-07-P1-重建部署验证.md)。
+详见 [部署记录](docs/test/2026-11-07-部署到法兰克福.md)、[管理员账户与域名记录](docs/test/2026-11-07-管理员账户与域名.md)、[P1 重建部署验证](docs/test/2026-11-07-P1-重建部署验证.md)、[1Panel 路径拓扑与发布方式](docs/summary/2026-11-07-1panel路径拓扑与发布方式.md)。
 
 ## 文档
 
