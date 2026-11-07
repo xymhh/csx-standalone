@@ -56,9 +56,10 @@ docker compose up --build
 
 - 公网：**https://csx.xymhh.eu.org**（Cloudflare 隧道 `berohost` → `http://csx-standalone:8000`）
 - 法兰克福 1Panel：容器 `csx-standalone`，内网 `http://csx-standalone:8000`（`1panel-network`，无宿主端口）
-- 代码 `/opt/1panel/apps/csx-standalone`，compose `/opt/1panel/docker/compose/csx-standalone/docker-compose.yml`，数据卷 `data:/data`
+- 代码 `/opt/csx-standalone`，compose `/opt/1panel/docker/compose/csx-standalone/docker-compose.yml`，数据卷 `csx-standalone_data:/data`
+- 发布：把仓库打包上传 1Panel `/tmp` → 一次性容器 `tar xzf` 解到 `/opt/csx-standalone` → `compose/operate` `up`（**换 image tag 才会重建**）
 
-详见 [部署记录](docs/test/2026-11-07-部署到法兰克福.md) 与 [管理员账户与域名记录](docs/test/2026-11-07-管理员账户与域名.md)。
+详见 [部署记录](docs/test/2026-11-07-部署到法兰克福.md)、[管理员账户与域名记录](docs/test/2026-11-07-管理员账户与域名.md)、[P1 重建部署验证](docs/test/2026-11-07-P1-重建部署验证.md)。
 
 ## 文档
 
