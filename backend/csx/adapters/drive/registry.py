@@ -4,36 +4,59 @@ from __future__ import annotations
 
 import os
 
+from sqlalchemy.orm import Session
+
+from csx.infra.credentials import decrypt_credential
+from csx.infra.models import Account
+
 
 class DriveRegistry:
     @staticmethod
-    def from_environment() -> dict[str, object]:
-        from csx.vendor.core.cloud import CloudDriveCapability
-        from csx.vendor.drive.p115.client import P115ClientManager
-        from csx.vendor.drive.p115.provider import create_p115_provider
-        from csx.vendor.drive.quark.client import QuarkClient
-        from csx.vendor.drive.quark.provider import QuarkDrive, create_quark_provider
+    def build(provider: str, credential: str) -> object:
+        provider = provider.lower()
+        if provider == "115":
+            from csx.vendor.core.cloud import CloudDriveCapability
+            from csx.vendor.drive.p115.client import P115ClientManager
+            from csx.vendor.drive.p115.provider import create_p115_provider
 
+            manager = P115ClientManager(credential)
+            services = create_p115_provider(manager).services
+            from .p115 import P115DriveAdapter
+
+            return P115DriveAdapter(
+                services[CloudDriveCapability.SHARE_TRANSFER],
+                services[CloudDriveCapability.FILE_QUERY],
+            )
+        if provider == "quark":
+            from csx.vendor.core.cloud import CloudDriveCapability
+            from csx.vendor.drive.quark.client import QuarkClient
+            from csx.vendor.drive.quark.provider import QuarkDrive, create_quark_provider
+
+            drive = QuarkDrive(QuarkClient(cookie=credential))
+            services = create_quark_provider(drive).services
+            from .quark import QuarkDriveAdapter
+
+            return QuarkDriveAdapter(
+                services[CloudDriveCapability.SHARE_TRANSFER],
+                services[CloudDriveCapability.FILE_QUERY],
+            )
+        raise ValueError(f"unsupported drive provider: {provider}")
+
+    @classmethod
+    def from_session(cls, db: Session) -> dict[str, object]:
+        return {
+            account.provider: cls.build(account.provider, decrypt_credential(account.credential))
+            for account in db.query(Account).all()
+            if account.provider in {"115", "quark"}
+        }
+
+    @staticmethod
+    def from_environment() -> dict[str, object]:
         result = {}
         cookie = os.getenv("CSX_115_COOKIE", "").strip()
         if cookie:
-            manager = P115ClientManager(cookie)
-            provider = create_p115_provider(manager)
-            from .p115 import P115DriveAdapter
-
-            result["115"] = P115DriveAdapter(
-                provider.services[CloudDriveCapability.SHARE_TRANSFER],
-                provider.services[CloudDriveCapability.FILE_QUERY],
-            )
+            result["115"] = DriveRegistry.build("115", cookie)
         quark_cookie = os.getenv("CSX_QUARK_COOKIE", "").strip()
         if quark_cookie:
-            client = QuarkClient(cookie=quark_cookie)
-            drive = QuarkDrive(client)
-            provider = create_quark_provider(drive)
-            from .quark import QuarkDriveAdapter
-
-            result["quark"] = QuarkDriveAdapter(
-                provider.services[CloudDriveCapability.SHARE_TRANSFER],
-                provider.services[CloudDriveCapability.FILE_QUERY],
-            )
+            result["quark"] = DriveRegistry.build("quark", quark_cookie)
         return result

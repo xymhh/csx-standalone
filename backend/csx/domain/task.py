@@ -38,6 +38,7 @@ ALLOWED_TRANSITIONS: dict[TaskState, frozenset[TaskState]] = {
     TaskState.RETRY_WAIT: frozenset(
         {
             TaskState.RUNNING,
+            TaskState.QUEUED,
             TaskState.CANCELLED,
             TaskState.DEAD_LETTER,
         }

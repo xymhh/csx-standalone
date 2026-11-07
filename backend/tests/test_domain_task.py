@@ -64,6 +64,7 @@ class TestAllowedTransitionsTable:
         assert allowed == frozenset(
             {
                 TaskState.RUNNING,
+                TaskState.QUEUED,
                 TaskState.CANCELLED,
                 TaskState.DEAD_LETTER,
             }
@@ -111,6 +112,9 @@ class TestCanTransition:
 
     def test_valid_retry_wait_to_running(self):
         assert can_transition(TaskState.RETRY_WAIT, TaskState.RUNNING) is True
+
+    def test_valid_retry_wait_to_queued(self):
+        assert can_transition(TaskState.RETRY_WAIT, TaskState.QUEUED) is True
 
     def test_valid_retry_wait_to_dead_letter(self):
         assert can_transition(TaskState.RETRY_WAIT, TaskState.DEAD_LETTER) is True

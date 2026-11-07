@@ -129,8 +129,9 @@ class SqlAlchemySubscriptionRepository:
 
 
 class SqlAlchemyTaskRepository:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, on_transition=None) -> None:
         self.session = session
+        self.on_transition = on_transition
 
     def create_or_get(
         self,
@@ -172,6 +173,8 @@ class SqlAlchemyTaskRepository:
         if error:
             row.last_error = error
         self.session.flush()
+        if self.on_transition is not None:
+            self.on_transition(task_id, src.value, dst.value, error)
         return dst
 
     def get(self, task_id: int) -> dict | None:

@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -15,12 +16,14 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from csx import __version__
 from csx.api.deps import COOKIE_NAME
-from csx.api.envelope import ok
-from csx.api.routes import auth, health
+from csx.api.envelope import fail, ok
+from csx.api.routes import auth, health, resources
 from csx.application.auth import session_user
 from csx.infra.bootstrap import ensure_admin, init_db
 from csx.infra.db import SessionLocal
+from csx.infra.drive_runtime import configured_drives
 from csx.infra.logging import setup_logging
+from csx.infra.scheduler import TaskScheduler
 from csx.infra.settings import settings
 
 PUBLIC_API_PATHS = {"/api/v1/auth/login"}
@@ -32,7 +35,15 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     init_db()
     ensure_admin()
-    yield
+    with SessionLocal() as db:
+        app.state.drives = configured_drives(db)
+    scheduler = TaskScheduler(drives=app.state.drives)
+    app.state.scheduler = scheduler
+    await scheduler.start()
+    try:
+        yield
+    finally:
+        await scheduler.stop()
 
 
 app = FastAPI(title="CloudSubscribeX", version=__version__, lifespan=lifespan)
@@ -62,11 +73,7 @@ async def auth_guard(request: Request, call_next: Any) -> Any:
     if not await run_in_threadpool(_lookup_user, token):
         return JSONResponse(
             status_code=401,
-            content={
-                "ok": False,
-                "data": None,
-                "error": {"code": "UNAUTHORIZED", "message": "需要登录", "hint": None},
-            },
+            content=fail("UNAUTHORIZED", "需要登录"),
         )
     return await call_next(request)
 
@@ -75,22 +82,45 @@ async def auth_guard(request: Request, call_next: Any) -> Any:
 async def http_exception_handler(_request: Request, exc: HTTPException) -> JSONResponse:
     detail = exc.detail
     if isinstance(detail, dict):
-        error = {
-            "code": detail.get("code", "ERROR"),
-            "message": detail.get("message", "请求失败"),
-            "hint": detail.get("hint"),
-        }
+        error = fail(
+            detail.get("code", "ERROR"),
+            detail.get("message", "请求失败"),
+            detail.get("hint"),
+        )
     else:
-        error = {"code": "ERROR", "message": str(detail), "hint": None}
+        error = fail("ERROR", str(detail))
     return JSONResponse(
         status_code=exc.status_code,
-        content={"ok": False, "data": None, "error": error},
+        content=error,
         headers=getattr(exc, "headers", None),
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    _request: Request, _exc: RequestValidationError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content=fail("VALIDATION_ERROR", "请求参数无效"),
     )
 
 
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
+for resource_router in (
+    resources.subscriptions,
+    resources.progress,
+    resources.candidates,
+    resources.tasks,
+    resources.history,
+    resources.library,
+    resources.settings_api,
+    resources.accounts,
+    resources.doctor,
+    resources.events,
+):
+    app.include_router(resource_router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["meta"])

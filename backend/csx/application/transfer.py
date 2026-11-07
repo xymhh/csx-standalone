@@ -174,6 +174,7 @@ def execute_transfer(session, task_row, *, drives, repos, settings) -> dict:
                 path=path,
                 size=size,
                 sha1=sha1,
+                quality_bucket=bucket,
             )
             file_row = {
                 "file_id": file_id,

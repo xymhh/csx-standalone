@@ -151,6 +151,7 @@ class LibraryFile(Base):
     path: Mapped[str] = mapped_column(Text, nullable=False)
     size: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     sha1: Mapped[str | None] = mapped_column(String)
+    quality_bucket: Mapped[str] = mapped_column(String, default="sd", nullable=False)
     landed_verified: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
@@ -175,6 +176,7 @@ class Account(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     provider: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String, default="", nullable=False)
     credential: Mapped[str] = mapped_column(Text, nullable=False)
     quota_state: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
     created_at: Mapped[datetime] = mapped_column(

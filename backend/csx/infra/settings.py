@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     web_dist: Path = Path("web/dist")
     transfer_root: str = "CSX"
     library_root: str = ""
+    secret_key: str = ""
 
     # 鉴权
     admin_user: str = "admin"

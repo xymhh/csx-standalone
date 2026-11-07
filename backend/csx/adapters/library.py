@@ -23,7 +23,15 @@ class SqlAlchemyLibraryRepository:
         self.session = session
 
     def upsert_episode_file(
-        self, *, media_id: int, season: int, episode: int, path: str, size: int, sha1: str
+        self,
+        *,
+        media_id: int,
+        season: int,
+        episode: int,
+        path: str,
+        size: int,
+        sha1: str,
+        quality_bucket: str = "sd",
     ) -> int:
         season_row = self.session.scalar(
             select(Season).where(Season.media_id == media_id, Season.season_number == season)
@@ -50,7 +58,7 @@ class SqlAlchemyLibraryRepository:
         if row is None:
             row = LibraryFile(episode_id=episode_row.id, path=path)
             self.session.add(row)
-        row.path, row.size, row.sha1 = path, size, sha1 or None
+        row.path, row.size, row.sha1, row.quality_bucket = path, size, sha1 or None, quality_bucket
         self.session.flush()
         return row.id
 
@@ -64,9 +72,9 @@ class SqlAlchemyLibraryRepository:
 class SqlAlchemyTransferRepositories:
     """P3 application repository bundle backed by the existing P1 schema."""
 
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, on_task_transition=None) -> None:
         self.session = session
-        self.tasks = SqlAlchemyTaskRepository(session)
+        self.tasks = SqlAlchemyTaskRepository(session, on_task_transition)
         self.library = SqlAlchemyLibraryRepository(session)
 
     def get_resource(self, resource_id: int) -> dict | None:
