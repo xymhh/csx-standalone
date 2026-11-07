@@ -165,29 +165,45 @@ def create_subscription(body: SubscriptionIn, db: Session = Depends(get_db)):
                 _raise(400, "TITLE_REQUIRED", "请提供影视片名或有效的媒体编号")
 
         m_type = "movie" if body.media_type == "movie" else "tv"
-        media = MediaItem(
-            title=title,
-            type=m_type,
-            year=body.year,
-            tmdb_id=body.tmdb_id,
+        media = db.scalar(
+            select(MediaItem).where(MediaItem.title == title, MediaItem.type == m_type)
         )
-        db.add(media)
-        db.flush()
+        if media is None:
+            fake_tmdb = body.tmdb_id
+            if not fake_tmdb:
+                import random
 
-        if m_type == "tv":
-            season_num = max(1, body.season_number)
-            ep_count = max(1, body.episode_count)
-            season = Season(media_id=media.id, season_number=season_num, episode_count=ep_count)
-            db.add(season)
+                while True:
+                    cand = -random.randint(10000, 999999999)
+                    if not db.scalar(select(MediaItem).where(MediaItem.tmdb_id == cand)):
+                        fake_tmdb = cand
+                        break
+
+            media = MediaItem(
+                title=title,
+                type=m_type,
+                year=body.year,
+                tmdb_id=fake_tmdb,
+            )
+            db.add(media)
             db.flush()
-            for ep_i in range(1, ep_count + 1):
-                db.add(Episode(season_id=season.id, episode_number=ep_i, title=f"第 {ep_i} 集"))
-        else:
-            season = Season(media_id=media.id, season_number=1, episode_count=1)
-            db.add(season)
+
+            if m_type == "tv":
+                season_num = max(1, body.season_number)
+                ep_count = max(1, body.episode_count)
+                season = Season(
+                    media_id=media.id, season_number=season_num, episode_count=ep_count
+                )
+                db.add(season)
+                db.flush()
+                for ep_i in range(1, ep_count + 1):
+                    db.add(Episode(season_id=season.id, episode_number=ep_i, title=f"第 {ep_i} 集"))
+            else:
+                season = Season(media_id=media.id, season_number=1, episode_count=1)
+                db.add(season)
+                db.flush()
+                db.add(Episode(season_id=season.id, episode_number=1, title="正片"))
             db.flush()
-            db.add(Episode(season_id=season.id, episode_number=1, title="正片"))
-        db.flush()
 
     row = Subscription(
         media_id=media.id,
