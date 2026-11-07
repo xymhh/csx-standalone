@@ -60,3 +60,26 @@ class DriveRegistry:
         if quark_cookie:
             result["quark"] = DriveRegistry.build("quark", quark_cookie)
         return result
+
+    @staticmethod
+    def checkin(provider: str, credential: str, config: dict | None = None) -> dict:
+        """Run the vendor's native check-in operation behind the drive boundary."""
+        provider = provider.lower()
+        config = config or {}
+        if provider == "115":
+            from csx.vendor.drive.p115.client import P115ClientManager
+
+            manager = P115ClientManager(credential)
+            return manager.checkin(str(config.get("p115_checkin_mode") or "normal"))
+        if provider == "quark":
+            from csx.vendor.drive.quark.client import QuarkClient
+
+            checkin_url = str(
+                config.get("quark_checkin_url") or config.get("_quark_checkin_url") or ""
+            )
+            client = QuarkClient(cookie=credential, checkin_url=checkin_url)
+            try:
+                return client.checkin("normal")
+            finally:
+                client.close()
+        raise ValueError(f"unsupported check-in provider: {provider}")

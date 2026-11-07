@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from starlette.concurrency import run_in_threadpool
@@ -61,12 +62,15 @@ class TaskScheduler:
         interval_seconds: float = 30,
         max_workers: int = 8,
         session_factory=SessionLocal,
+        checkin_callback: Callable[[], Any] | None = None,
     ) -> None:
         self.drives = drives if drives is not None else {}
         self.events = event_stream
         self.interval_seconds = interval_seconds
         self.max_workers = max_workers
         self.session_factory = session_factory
+        self.checkin_callback = checkin_callback
+        self._checkin_job: asyncio.Task | None = None
         self._poller: asyncio.Task | None = None
         self._workers: dict[int, asyncio.Task] = {}
         self._claimed_keys: set[str] = set()
@@ -79,6 +83,10 @@ class TaskScheduler:
         if self._poller is None or self._poller.done():
             self._stopping = False
             self._poller = asyncio.create_task(self._poll_loop(), name="csx-task-poller")
+            if self.checkin_callback is not None:
+                self._checkin_job = asyncio.create_task(
+                    self._checkin_loop(), name="csx-daily-checkin"
+                )
 
     async def stop(self) -> None:
         self._stopping = True
@@ -86,6 +94,10 @@ class TaskScheduler:
             self._poller.cancel()
             await asyncio.gather(self._poller, return_exceptions=True)
             self._poller = None
+        if self._checkin_job is not None:
+            self._checkin_job.cancel()
+            await asyncio.gather(self._checkin_job, return_exceptions=True)
+            self._checkin_job = None
         workers = list(self._workers.values())
         if workers:
             await asyncio.gather(*workers, return_exceptions=True)
@@ -99,6 +111,27 @@ class TaskScheduler:
                 await asyncio.sleep(self.interval_seconds)
             except asyncio.CancelledError:
                 break
+
+    @staticmethod
+    def seconds_until_daily_checkin(now: datetime | None = None) -> float:
+        current = now or datetime.now().astimezone()
+        target = current.replace(hour=0, minute=30, second=0, microsecond=0)
+        if current >= target:
+            target += timedelta(days=1)
+        return max(0.0, (target - current).total_seconds())
+
+    async def _checkin_loop(self) -> None:
+        while not self._stopping:
+            try:
+                await asyncio.sleep(self.seconds_until_daily_checkin())
+                if self._stopping:
+                    return
+                await run_in_threadpool(self.checkin_callback)
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                # Check-in is a side task and cannot stop queue polling.
+                await asyncio.sleep(60)
 
     async def poll_once(self) -> int:
         self._workers = {task_id: job for task_id, job in self._workers.items() if not job.done()}
@@ -131,6 +164,7 @@ class TaskScheduler:
 
     async def _run_task(self, row: dict) -> None:
         provider = "unknown"
+        started = time.monotonic()
         try:
             resource = await run_in_threadpool(self._resource_for_task, row)
             provider = str(resource.get("provider", "unknown")).lower()
@@ -153,6 +187,13 @@ class TaskScheduler:
                         "error": error or result.get("error", ""),
                     },
                 )
+            result["duration"] = round(time.monotonic() - started, 3)
+            if self.session_factory is SessionLocal and (
+                result.get("ok") or result.get("state") == TaskState.DEAD_LETTER.value
+            ):
+                from csx.infra.side_effects import schedule_transfer_side_effects
+
+                schedule_transfer_side_effects(self.session_factory, result, resource)
             if result.get("ok") and resource.get("media_id") is not None:
                 await self.events.publish(
                     "progress_update", {"media_id": resource["media_id"], "task_id": row["id"]}

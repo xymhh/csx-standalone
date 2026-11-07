@@ -152,6 +152,7 @@ class LibraryFile(Base):
     size: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     sha1: Mapped[str | None] = mapped_column(String)
     quality_bucket: Mapped[str] = mapped_column(String, default="sd", nullable=False)
+    provider: Mapped[str | None] = mapped_column(String(32))
     landed_verified: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
@@ -192,3 +193,22 @@ class Setting(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )
+
+
+class CheckinRecord(Base):
+    """Persistent result of one drive account check-in attempt."""
+
+    __tablename__ = "checkin_record"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("account.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    provider: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    account_name: Mapped[str] = mapped_column(String(128), default="", nullable=False)
+    checked_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    success: Mapped[bool] = mapped_column(Integer, default=0, nullable=False)
+    reward: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    message: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    consecutive_days: Mapped[int | None] = mapped_column(Integer)
+    details: Mapped[str] = mapped_column(Text, default="{}", nullable=False)

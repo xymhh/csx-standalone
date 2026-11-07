@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import posixpath
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from csx.ports.drive import CloudFile, ShareFile, ShareStatus, TransferOutcome
@@ -84,6 +85,16 @@ class P115DriveAdapter:
         if item is None or not self.files.rename_file(path, item, new_name):
             raise RuntimeError(f"115 重命名失败: {file_id}")
         self._known[str(file_id)] = (item, path)
+
+    def get_download_url(self, path: str) -> str:
+        directory, filename = posixpath.split(str(path))
+        item = self.files.find_file(directory or "/", filename)
+        if item is None:
+            raise FileNotFoundError(f"云盘文件不存在：{path}")
+        url, _headers = self.files.resolve_download_link(item)
+        if not url:
+            raise RuntimeError(f"未获得文件直链：{path}")
+        return str(url)
 
     def list_dir(self, path: str) -> list[CloudFile]:
         items = self.files.list_files_recursive(path)

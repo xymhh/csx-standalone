@@ -12,6 +12,7 @@ from csx.application.organize import organize_file
 from csx.domain.naming import parse_episode_from_name
 from csx.domain.resource import idempotency_key
 from csx.domain.task import TaskState, on_failure
+from csx.domain.upgrade import UpgradeAction, decide_upgrade
 
 _GLOBAL = threading.BoundedSemaphore(8)
 _LOCKS: dict[str, threading.Lock] = {}
@@ -88,6 +89,19 @@ def execute_transfer(session, task_row, *, drives, repos, settings) -> dict:
         subscription_id=task_row.get("subscription_id"),
         resource_id=task_row.get("resource_id"),
     )
+    library_lookup = getattr(repos.library, "get_episode_file", None)
+    existing_file = (
+        library_lookup(media_id=media_id, season=season, episode=episode)
+        if library_lookup is not None and media_id
+        else None
+    )
+    upgrade_decision = None
+    if existing_file:
+        upgrade_decision = decide_upgrade(
+            existing_file.get("quality_bucket"),
+            bucket,
+            upgrade_enabled=bool(resource.get("upgrade_enabled", True)),
+        )
     drive = drives[provider]
     with _serialize(key):
         stored = repos.tasks.get(task_id) if hasattr(repos.tasks, "get") else None
@@ -102,6 +116,19 @@ def execute_transfer(session, task_row, *, drives, repos, settings) -> dict:
                 "error": "task already running",
             }
         _transition(repos, task_id, TaskState.RUNNING)
+        if upgrade_decision and upgrade_decision.action is not UpgradeAction.UPGRADE:
+            _transition(repos, task_id, TaskState.CANCELLED, upgrade_decision.action.value)
+            ignore = getattr(repos, "ignore_resource", None)
+            if ignore is not None:
+                ignore(int(task_row["resource_id"]), "ignored_low_quality")
+            return {
+                "ok": False,
+                "task_id": task_id,
+                "state": upgrade_decision.action.value,
+                "candidate_state": "ignored_low_quality",
+                "existing_bucket": upgrade_decision.existing_bucket,
+                "candidate_bucket": upgrade_decision.candidate_bucket,
+            }
         task_state = repos.tasks.get(task_id) if hasattr(repos.tasks, "get") else {}
         current_attempt = int((task_state or {}).get("attempt", task_row.get("attempt", 1)))
         _take_token(provider)
@@ -175,6 +202,7 @@ def execute_transfer(session, task_row, *, drives, repos, settings) -> dict:
                 size=size,
                 sha1=sha1,
                 quality_bucket=bucket,
+                provider=provider,
             )
             file_row = {
                 "file_id": file_id,
@@ -219,6 +247,11 @@ def execute_transfer(session, task_row, *, drives, repos, settings) -> dict:
         return {
             "ok": True,
             "task_id": task_id,
+            "is_upgrade": bool(existing_file and upgrade_decision and upgrade_decision.is_upgrade),
+            "existing_bucket": existing_file.get("quality_bucket", "") if existing_file else "",
+            "quality_bucket": bucket,
+            "season": season,
+            "episode": episode,
             "organized": organized,
             "organize_errors": errors,
             "created": outcome.created,

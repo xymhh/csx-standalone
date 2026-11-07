@@ -32,6 +32,7 @@ class SqlAlchemyLibraryRepository:
         size: int,
         sha1: str,
         quality_bucket: str = "sd",
+        provider: str | None = None,
     ) -> int:
         season_row = self.session.scalar(
             select(Season).where(Season.media_id == media_id, Season.season_number == season)
@@ -59,8 +60,33 @@ class SqlAlchemyLibraryRepository:
             row = LibraryFile(episode_id=episode_row.id, path=path)
             self.session.add(row)
         row.path, row.size, row.sha1, row.quality_bucket = path, size, sha1 or None, quality_bucket
+        row.provider = provider
         self.session.flush()
         return row.id
+
+    def get_episode_file(self, *, media_id: int, season: int, episode: int) -> dict | None:
+        row = self.session.scalar(
+            select(LibraryFile)
+            .join(Episode, LibraryFile.episode_id == Episode.id)
+            .join(Season, Episode.season_id == Season.id)
+            .where(
+                Season.media_id == media_id,
+                Season.season_number == season,
+                Episode.episode_number == episode,
+            )
+            .order_by(LibraryFile.id)
+            .limit(1)
+        )
+        if row is None:
+            return None
+        return {
+            "id": row.id,
+            "path": row.path,
+            "quality_bucket": row.quality_bucket,
+            "provider": row.provider,
+            "size": row.size,
+            "sha1": row.sha1,
+        }
 
     def update_path(self, *, file_id: str, old_path: str, new_path: str) -> None:
         row = self.session.scalar(select(LibraryFile).where(LibraryFile.path == old_path))
@@ -85,6 +111,10 @@ class SqlAlchemyTransferRepositories:
         payload = json.loads(row.payload or "{}")
         media_id = subscription.media_id if subscription else None
         media = self.session.get(MediaItem, media_id) if media_id is not None else None
+        quality_pref = json.loads(subscription.quality_pref or "{}") if subscription else {}
+        upgrade_enabled = (
+            quality_pref.get("upgrade_enabled", True) if isinstance(quality_pref, dict) else True
+        )
         return {
             **payload,
             "id": row.id,
@@ -98,7 +128,14 @@ class SqlAlchemyTransferRepositories:
                 else None
             ),
             "idempotency_key": row.idempotency_key,
+            "upgrade_enabled": bool(upgrade_enabled),
         }
+
+    def ignore_resource(self, resource_id: int, state: str) -> None:
+        row = self.session.get(DiscoveredResource, resource_id)
+        if row is not None:
+            row.state = state
+            self.session.flush()
 
     def get_media(self, media_id: int) -> dict | None:
         row = self.session.get(MediaItem, media_id)

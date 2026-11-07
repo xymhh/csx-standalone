@@ -16,10 +16,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from csx.adapters.library import SqlAlchemyLibraryRepository
+from csx.adapters.media.emby import server_clients
 from csx.api.envelope import ok
 from csx.domain.resource import idempotency_key
 from csx.domain.subscription import SubscriptionScope
 from csx.domain.task import TaskState
+from csx.domain.upgrade import UpgradeAction, decide_upgrade
 from csx.infra.credentials import encrypt_credential
 from csx.infra.db import SessionLocal, get_db
 from csx.infra.drive_runtime import drive_for
@@ -262,6 +265,34 @@ def accept_candidate(candidate_id: int, db: Session = Depends(get_db)):
     season = int(payload.get("season", 1))
     episode = int(payload.get("episode", 1))
     bucket = str(payload.get("quality_bucket", "sd"))
+    subscription = db.get(Subscription, row.subscription_id)
+    existing = (
+        SqlAlchemyLibraryRepository(db).get_episode_file(
+            media_id=subscription.media_id, season=season, episode=episode
+        )
+        if subscription
+        else None
+    )
+    quality_pref = json.loads(subscription.quality_pref or "{}") if subscription else {}
+    upgrade_enabled = (
+        bool(quality_pref.get("upgrade_enabled", True)) if isinstance(quality_pref, dict) else True
+    )
+    decision = (
+        decide_upgrade(existing.get("quality_bucket"), bucket, upgrade_enabled=upgrade_enabled)
+        if existing
+        else None
+    )
+    if decision and decision.action is not UpgradeAction.UPGRADE:
+        row.state = "ignored_low_quality"
+        db.commit()
+        return ok(
+            {
+                "candidate_id": row.id,
+                "state": "ignored_low_quality",
+                "existing_bucket": decision.existing_bucket,
+                "candidate_bucket": decision.candidate_bucket,
+            }
+        )
     key = row.idempotency_key or idempotency_key(
         row.provider, row.share_url, season, episode, bucket
     )
@@ -271,7 +302,14 @@ def accept_candidate(candidate_id: int, db: Session = Depends(get_db)):
     row.idempotency_key = key
     row.state = "accepted"
     db.commit()
-    return ok({"candidate_id": row.id, "task_id": task_id, "state": "queued"})
+    return ok(
+        {
+            "candidate_id": row.id,
+            "task_id": task_id,
+            "state": "queued",
+            "is_upgrade": bool(decision and decision.is_upgrade),
+        }
+    )
 
 
 @candidates.post("/{candidate_id}/ignore")
@@ -484,13 +522,40 @@ def library_files(
 
 
 @library.get("/servers")
-def library_servers():
-    return ok(
-        [
-            {"provider": "emby", "configured": False, "valid": None},
-            {"provider": "jellyfin", "configured": False, "valid": None},
-        ]
-    )
+def library_servers(db: Session = Depends(get_db)):
+    advanced = {}
+    for row in db.scalars(select(Setting).where(Setting.key.like("advanced.%"))):
+        advanced[row.key.split(".", 1)[1]] = json.loads(row.value)
+    clients = {client.provider: client for client in server_clients(advanced)}
+    result = []
+    for provider in ("emby", "jellyfin"):
+        client = clients.get(provider)
+        if client is None:
+            result.append({"provider": provider, "configured": False, "valid": None})
+            continue
+        try:
+            info = client.probe()
+            result.append(
+                {
+                    "provider": provider,
+                    "configured": True,
+                    "valid": True,
+                    "name": info.name,
+                    "version": info.version,
+                }
+            )
+        except Exception as error:
+            result.append(
+                {
+                    "provider": provider,
+                    "configured": True,
+                    "valid": False,
+                    "message": str(error),
+                }
+            )
+        finally:
+            client.close()
+    return ok(result)
 
 
 @settings_api.get("")
