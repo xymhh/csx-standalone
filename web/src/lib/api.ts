@@ -94,6 +94,9 @@ export interface SearchSourceField {
 export interface SearchSourceGroup { title: string; fields: SearchSourceField[] }
 export interface SearchSourceSchema { id: string; name: string; order: number; groups: SearchSourceGroup[] }
 export interface SearchSourceTest { valid: boolean; elapsed_ms: number; message: string }
+export interface TelegramShareLink { url: string; provider: string; password: string }
+export interface TelegramParseResult { title: string; season: number | null; episode: number | null; links: TelegramShareLink[]; matched_subscription_id: number | null }
+export interface TelegramStatus { enabled: boolean; channels: string[]; auto_transfer: boolean; ingested_count: number }
 export type Settings = Record<SettingSection, Record<string, unknown>>
 export interface PageQuery { page?: number; page_size?: number }
 const qs = (values: object) => { const q = new URLSearchParams(); Object.entries(values).forEach(([k,v]) => { if (v !== undefined && v !== null && v !== '') q.set(k, String(v)) }); return q.size ? `?${q}` : '' }
@@ -120,6 +123,11 @@ export const searchSourcesApi = {
   schema: () => api<SearchSourceSchema[]>('/api/v1/settings/sources/schema'),
   save: (body: Record<string, Record<string, unknown>>) => api<SearchSourceSchema[]>('/api/v1/settings/sources', { method: 'PUT', body: JSON.stringify(body) }),
   test: (sourceId: string) => api<SearchSourceTest>(`/api/v1/settings/sources/test/${encodeURIComponent(sourceId)}`, { method: 'POST' }),
+}
+export const telegramApi = {
+  parse: (text: string, extra_urls: string[] = []) => api<TelegramParseResult>('/api/v1/tg/parse', { method: 'POST', body: JSON.stringify({ text, extra_urls }) }),
+  ingest: (body: { channel: string; message_id?: number; text: string; auto_transfer?: boolean }) => api<{ ingested: boolean; resources_count: number; tasks_created: number[]; message: string }>('/api/v1/tg/ingest', { method: 'POST', body: JSON.stringify(body) }),
+  status: () => api<TelegramStatus>('/api/v1/tg/status'),
 }
 export const accountsApi = {
   list: () => api<Account[]>('/api/v1/accounts'),
