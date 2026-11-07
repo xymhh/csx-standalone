@@ -12,6 +12,18 @@ dependencies = [
     "alembic>=1.14",
     "apscheduler>=3.10",
     "httpx>=0.27",
+    "requests>=2.32",
+    "p115client",
+    "p115oss",
+    "urllib3-future",
+    "cryptography>=43",
+    "pycryptodome>=3.20",
+    "beautifulsoup4>=4.12",
+    "numpy>=1.26",
+    "pillow>=10",
+    "qrcode>=8",
+    "cloakbrowser",
+    "torf>=4",
 ]
 
 [project.optional-dependencies]
@@ -42,3 +54,10 @@ addopts = "-q"
 [tool.ruff.lint.per-file-ignores]
 # FastAPI 的 Depends 必须写在参数默认值里
 "csx/api/**" = ["B008"]
+# Preserve upstream vendor files byte-for-byte apart from approved import replacements.
+"csx/vendor/**" = [
+    "B010", "B904", "B905", "E731", "I001", "RUF005", "RUF007", "RUF010",
+    "RUF012", "RUF013", "RUF022", "RUF023", "RUF046", "RUF059", "RUF100",
+    "SIM102", "SIM103", "SIM117", "UP006", "UP007", "UP012", "UP017", "UP024",
+    "UP035", "UP037", "UP042", "UP045",
+]
