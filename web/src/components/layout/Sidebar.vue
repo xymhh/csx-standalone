@@ -23,16 +23,16 @@ const emit = defineEmits<{ close: []; compactChange: [compact: boolean] }>()
 const route = useRoute()
 const compact = ref(false)
 const links = [
-  ['/', '总览', LayoutDashboard],
-  ['/progress', '追更进度', Gauge],
-  ['/baseline', '订阅基准', Database],
-  ['/radar', '双源雷达', Radio],
-  ['/candidates', '候选资源', Layers],
-  ['/search', '手动搜索', Search],
-  ['/tasks', '执行队列', ListChecks],
-  ['/history', '转存流水', History],
-  ['/media', '媒体资产', Library],
-  ['/settings', '系统设置', Settings],
+  ['/', '控制台', LayoutDashboard],
+  ['/progress', '追剧进度', Gauge],
+  ['/baseline', '我的订阅', Database],
+  ['/radar', '搜索监控', Radio],
+  ['/candidates', '待选资源', Layers],
+  ['/search', '搜影视', Search],
+  ['/tasks', '转存任务', ListChecks],
+  ['/history', '转存历史', History],
+  ['/media', '媒体库', Library],
+  ['/settings', '设置', Settings],
 ] as const
 
 function toggleCompact() {
@@ -56,7 +56,7 @@ function toggleCompact() {
       <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-zinc-100 text-sm font-bold text-zinc-900 shadow-sm shadow-primary/10">CS</span>
       <div v-if="!compact || open" class="min-w-0 flex-1">
         <p class="text-sm font-semibold tracking-tight text-fg whitespace-nowrap">CloudSubscribeX</p>
-        <p class="text-xs text-muted">媒体自动化控制台</p>
+        <p class="text-xs text-muted">自动追剧与网盘助手</p>
       </div>
       <button
         class="ml-auto grid min-h-[44px] min-w-[44px] place-items-center rounded-lg text-muted hover:bg-surface-2 hover:text-fg lg:hidden"
@@ -92,13 +92,13 @@ function toggleCompact() {
           class="h-4 w-4 shrink-0 transition-colors"
           :class="route.path === path ? 'text-primary' : 'text-subtle group-hover:text-fg'"
         />
-        <span v-if="!compact || open">{{ label }}</span>
+        <span v-if="!compact || open" class="font-medium">{{ label }}</span>
       </RouterLink>
     </nav>
     <div v-if="!compact || open" class="border-t border-border p-4">
-      <p class="mb-2 text-[11px] font-semibold uppercase tracking-widest text-subtle">Pipeline</p>
-      <p class="text-xs leading-6 text-muted">基准面 → 缺集 → 双源 → 候选 → 转存</p>
-      <p class="mt-3 font-mono text-[10px] tracking-wider text-subtle">CSX · P7 STABLE</p>
+      <p class="mb-1 text-[11px] font-semibold tracking-wider text-subtle">自动追剧流程</p>
+      <p class="text-xs leading-5 text-muted">订阅 → 查缺 → 找源 → 优选 → 入库</p>
+      <p class="mt-2 font-mono text-[10px] tracking-wider text-subtle">全自动无人值守</p>
     </div>
   </aside>
 </template>

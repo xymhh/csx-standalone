@@ -1,21 +1,23 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
-import { accountsApi, settingsApi, type Account, type SettingSection } from '@/lib/api'
-import Tabs from '@/components/ui/Tabs.vue'
+import { Plus, RefreshCw, Trash2, KeyRound } from '@lucide/vue'
+
+import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
+import Dialog from '@/components/ui/Dialog.vue'
 import Input from '@/components/ui/Input.vue'
 import Select from '@/components/ui/Select.vue'
-import Dialog from '@/components/ui/Dialog.vue'
-import Badge from '@/components/ui/Badge.vue'
+import Tabs from '@/components/ui/Tabs.vue'
 import { useToast } from '@/composables/useToast'
+import { accountsApi, settingsApi, type Account, type SettingSection } from '@/lib/api'
 
-const sections: { value: SettingSection; label: string }[] = [
-  { value: 'baseline', label: '基准面' },
-  { value: 'sources', label: '双源' },
-  { value: 'transfer', label: '转存' },
-  { value: 'strm', label: 'STRM' },
-  { value: 'notify', label: '通知' },
-  { value: 'advanced', label: '高级' },
+const sections: { value: SettingSection; label: string; desc: string; sample: string }[] = [
+  { value: 'baseline', label: '追剧规则', desc: '配置默认追更窗口、语言与定时任务偏好。', sample: '{\n  "window_days": 14,\n  "language": "zh-CN"\n}' },
+  { value: 'sources', label: '搜索找源', desc: '开启或关闭各大网盘资源搜索站点。', sample: '{\n  "pansou": true,\n  "mikan": true,\n  "piratebay": true\n}' },
+  { value: 'transfer', label: '网盘转存', desc: '转存目标路径与画质洗版优先顺序。', sample: '{\n  "default_drive": "quark",\n  "upgrade_enabled": true,\n  "quality_order": ["remux", "dv", "hdr", "4k", "hd"]\n}' },
+  { value: 'strm', label: '直链播放', desc: 'STRM 播放模式（直链 / 本地挂载 / 代理）。', sample: '{\n  "mode": "local_mount",\n  "local_mount_root": "/mnt/quark"\n}' },
+  { value: 'notify', label: '消息通知', desc: '转存成功、更新与异常时的微信/飞书/TG 通知。', sample: '{\n  "channels": {\n    "feishu": { "enabled": false, "webhook_url": "" },\n    "telegram": { "enabled": false, "bot_token": "", "chat_id": "" }\n  }\n}' },
+  { value: 'advanced', label: '高级设置', desc: '系统运行性能与高级调度参数。', sample: '{\n  "log_level": "INFO"\n}' },
 ]
 const section = ref<SettingSection>('baseline')
 const data = ref<Record<string, unknown>>({})
@@ -30,7 +32,8 @@ const { toast } = useToast()
 
 async function loadSettings() {
   data.value = await settingsApi.getSection(section.value)
-  editor.value = JSON.stringify(data.value, null, 2)
+  const current = sections.find((x) => x.value === section.value)
+  editor.value = Object.keys(data.value).length ? JSON.stringify(data.value, null, 2) : (current?.sample ?? '{}')
 }
 async function loadAccounts() {
   accounts.value = await accountsApi.list()
@@ -40,82 +43,187 @@ async function load() {
 }
 onMounted(load)
 watch(section, loadSettings)
+
 async function save() {
   try {
     const parsed: unknown = JSON.parse(editor.value)
     if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
-      throw new Error('设置内容必须是 JSON 对象')
+      throw new Error('配置内容必须是标准的 JSON 对象格式')
     }
     data.value = await settingsApi.updateSection(section.value, parsed as Record<string, unknown>)
     editor.value = JSON.stringify(data.value, null, 2)
     toast('设置已保存', 'success')
-  } catch (error) {
-    toast(error instanceof Error ? error.message : '保存失败', 'error')
+  } catch (cause) {
+    toast(cause instanceof Error ? cause.message : '保存失败，请检查输入格式', 'error')
   }
 }
-async function saveAccount() {
-  if (editing.value) {
-    await accountsApi.update(editing.value.id, { name: name.value, ...(credential.value ? { credential: credential.value } : {}) })
-  } else {
-    await accountsApi.create({ provider: provider.value, name: name.value, credential: credential.value })
-  }
-  credential.value = ''
-  name.value = ''
+
+function openAdd() {
   editing.value = null
-  open.value = false
-  await loadAccounts()
-  toast('账号已保存', 'success')
-}
-function editAccount(account: Account) {
-  editing.value = account
-  provider.value = account.provider
-  name.value = account.name
+  provider.value = '115'
+  name.value = ''
   credential.value = ''
   open.value = true
 }
+
+async function submitAccount() {
+  try {
+    if (editing.value) {
+      await accountsApi.update(editing.value.id, {
+        name: name.value,
+        credential: credential.value || undefined,
+      })
+      toast('账号已更新', 'success')
+    } else {
+      await accountsApi.create({
+        provider: provider.value,
+        name: name.value,
+        credential: credential.value,
+      })
+      toast('网盘账号添加成功', 'success')
+    }
+    open.value = false
+    await loadAccounts()
+  } catch (cause) {
+    toast(cause instanceof Error ? cause.message : '操作失败', 'error')
+  }
+}
+
 async function removeAccount(id: number) {
   await accountsApi.delete(id)
   await loadAccounts()
+  toast('账号已删除', 'info')
 }
+
 async function testAccount(id: number) {
-  const result = await accountsApi.test(id)
-  toast(`${result.provider}：${result.message}`, result.valid ? 'success' : 'error')
+  try {
+    const res = await accountsApi.test(id)
+    toast(`${res.provider}网盘：${res.message}`, res.valid ? 'success' : 'error')
+  } catch (cause) {
+    toast(cause instanceof Error ? cause.message : '检测失败', 'error')
+  }
 }
 </script>
+
 <template>
-  <div class="space-y-5">
-    <div><h2 class="text-xl font-semibold">系统设置</h2><p class="text-sm text-muted">按职责分组管理系统策略与账号凭据</p></div>
+  <div class="space-y-7">
+    <div>
+      <h2 class="text-2xl font-semibold tracking-tight text-fg">设置</h2>
+      <p class="mt-1 text-sm text-muted">配置你的网盘账号、自动追更偏好与播放方式</p>
+    </div>
+
+    <!-- 6 大分组 Tab -->
     <Tabs v-model="section" :items="sections" />
-    <section class="grid gap-6 rounded-xl border border-border bg-surface p-5 shadow-sm shadow-black/40 lg:grid-cols-[minmax(220px,0.8fr)_minmax(0,1.6fr)] lg:p-6">
-      <div class="space-y-2">
-        <p class="font-mono text-[10px] uppercase tracking-[0.18em] text-subtle">Configuration</p>
-        <h3 class="text-base font-semibold tracking-tight">{{ sections.find((item) => item.value === section)?.label }}设置</h3>
-        <p class="text-sm leading-relaxed text-muted">按分组管理系统策略。配置以 JSON 对象保存，可包含布尔值、数字、数组与嵌套字段。</p>
-        <Badge tone="muted">{{ section }}</Badge>
-      </div>
-      <div class="space-y-3">
-        <div class="flex items-center justify-between gap-3">
-          <span class="text-xs text-muted">本组设置数据</span>
-          <Button size="sm" @click="save">保存本组</Button>
+
+    <section class="surface-card p-6">
+      <div class="grid gap-6 lg:grid-cols-12">
+        <div class="lg:col-span-5 space-y-2">
+          <p class="font-mono text-[11px] uppercase tracking-wider text-muted">CONFIGURATION</p>
+          <h3 class="text-base font-semibold text-fg">{{ sections.find((x) => x.value === section)?.label }}</h3>
+          <p class="text-xs leading-5 text-muted">
+            {{ sections.find((x) => x.value === section)?.desc }}
+          </p>
+          <div class="pt-2">
+            <span class="inline-block rounded-md bg-surface-2 px-2.5 py-1 font-mono text-[11px] text-muted">
+              分组标识: {{ section }}
+            </span>
+          </div>
         </div>
-        <textarea v-model="editor" spellcheck="false" aria-label="设置 JSON" class="min-h-72 w-full bg-bg/70 p-4 font-mono text-sm leading-6 text-fg focus-visible:ring-1 focus-visible:ring-focus" />
+
+        <div class="lg:col-span-7 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-muted">配置详情（JSON 对象）</span>
+            <Button size="sm" @click="save">保存当前设置</Button>
+          </div>
+          <textarea
+            v-model="editor"
+            rows="10"
+            spellcheck="false"
+            class="w-full rounded-xl border border-border bg-bg/80 p-4 font-mono text-xs leading-5 text-fg focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+          />
+        </div>
       </div>
     </section>
-    <section class="space-y-3">
-      <div class="flex items-center justify-between"><h3 class="font-semibold">网盘账号</h3><Button variant="outline" @click="open = true">添加账号</Button></div>
-      <article v-for="account in accounts" :key="account.id" class="flex flex-wrap items-center gap-3 rounded-card border border-border bg-surface p-4">
-        <div class="min-w-0 flex-1"><p class="font-medium">{{ account.name }}</p><p class="text-xs text-muted">{{ account.provider }} · {{ account.has_credential ? account.masked : '未配置凭据' }}</p></div>
-        <Badge :tone="account.has_credential ? 'good' : 'warn'">凭据{{ account.has_credential ? '已设置' : '缺失' }}</Badge>
-        <Button variant="outline" size="sm" @click="testAccount(account.id)">测试</Button><Button variant="outline" size="sm" @click="editAccount(account)">编辑</Button><Button variant="ghost" size="sm" @click="removeAccount(account.id)">删除</Button>
-      </article>
-      <p v-if="!accounts.length" class="text-sm text-muted">尚未添加网盘账号</p>
+
+    <!-- 网盘账号管理 -->
+    <section class="space-y-4 pt-2">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 class="text-base font-semibold text-fg">我的网盘账号</h3>
+          <p class="mt-0.5 text-xs text-muted">绑定你的 115 或夸克网盘，转存的影视将直接保存到你的网盘中</p>
+        </div>
+        <Button @click="openAdd" class="flex items-center gap-2">
+          <Plus class="h-4 w-4" />
+          <span>绑定新网盘</span>
+        </Button>
+      </div>
+
+      <div v-if="!accounts.length" class="surface-card p-8 text-center text-sm text-muted">
+        <KeyRound class="mx-auto mb-2 h-6 w-6 text-muted" />
+        <p>尚未绑定任何网盘账号。点击右上角「绑定新网盘」添加一个吧。</p>
+      </div>
+
+      <div class="grid gap-3 sm:grid-cols-2">
+        <article
+          v-for="account in accounts"
+          :key="account.id"
+          class="surface-card flex items-center justify-between gap-3 p-4 transition-all hover:border-zinc-700"
+        >
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <strong class="font-medium text-fg text-sm">{{ account.name }}</strong>
+              <Badge tone="muted" class="text-[10px] uppercase">{{ account.provider }}网盘</Badge>
+            </div>
+            <p class="mt-1 text-xs text-muted">
+              凭据状态：{{ account.has_credential ? '已高强度加密保存' : '未设置' }}
+            </p>
+          </div>
+          <div class="flex items-center gap-2">
+            <Button variant="outline" size="sm" @click="testAccount(account.id)">
+              <RefreshCw class="mr-1 h-3.5 w-3.5" />
+              检测
+            </Button>
+            <Button variant="ghost" size="sm" class="text-rose-400 hover:text-rose-300" @click="removeAccount(account.id)">
+              <Trash2 class="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </article>
+      </div>
     </section>
-    <Dialog :open="open" :title="editing ? '编辑网盘账号' : '添加网盘账号'" @close="open = false; editing = null">
-      <form class="space-y-3" @submit.prevent="saveAccount">
-        <label v-if="!editing" class="block space-y-1 text-sm">服务商<Select v-model="provider" :options="[{ value: '115', label: '115 网盘' }, { value: 'quark', label: '夸克网盘' }]" /></label>
-        <label class="block space-y-1 text-sm">账号名称<Input v-model="name" required placeholder="家庭账号" /></label>
-        <label class="block space-y-1 text-sm">凭据<Input v-model="credential" type="password" autocomplete="new-password" :placeholder="editing ? '留空则保留原凭据' : '只在提交时发送，不会回显'" :required="!editing" /></label>
-        <Button type="submit" class="w-full">{{ editing ? '保存修改' : '添加并加密保存' }}</Button>
+
+    <Dialog :open="open" :title="editing ? '修改网盘账号' : '绑定网盘账号'" @close="open = false">
+      <form class="space-y-4" @submit.prevent="submitAccount">
+        <label class="block space-y-1.5 text-sm">
+          <span class="text-xs text-muted">网盘类型</span>
+          <Select
+            v-model="provider"
+            :options="[
+              { value: '115', label: '115 网盘' },
+              { value: 'quark', label: '夸克网盘' },
+            ]"
+            :disabled="!!editing"
+          />
+        </label>
+        <label class="block space-y-1.5 text-sm">
+          <span class="text-xs text-muted">账号备注名称</span>
+          <Input v-model="name" required placeholder="例如：我的主号、夸克SVIP" />
+        </label>
+        <label class="block space-y-1.5 text-sm">
+          <span class="text-xs text-muted">网页端 Cookie 凭据</span>
+          <Input
+            v-model="credential"
+            type="password"
+            :required="!editing"
+            autocomplete="new-password"
+            placeholder="粘贴网盘网页端的 Cookie 字符串"
+          />
+          <span class="text-[11px] text-muted">
+            凭据将直接使用 Fernet 工业级加密后保存，系统绝不输出或回显明文。
+          </span>
+        </label>
+        <Button type="submit" class="w-full">
+          {{ editing ? '保存修改' : '确认绑定' }}
+        </Button>
       </form>
     </Dialog>
   </div>
