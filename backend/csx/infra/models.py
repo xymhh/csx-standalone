@@ -1,10 +1,20 @@
-"""数据表定义（P0.5 只有鉴权相关两张表，P1 补齐业务表）。"""
+"""SQLAlchemy table definitions for authentication and P1 business data."""
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import (
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -31,3 +41,152 @@ class AuthSession(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     ip: Mapped[str] = mapped_column(String(64), default="")
     user_agent: Mapped[str] = mapped_column(String(255), default="")
+
+
+class MediaItem(Base):
+    __tablename__ = "media_item"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tmdb_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    type: Mapped[str] = mapped_column(String, nullable=False)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    year: Mapped[int | None] = mapped_column(Integer)
+    overview: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    poster_url: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+
+class Season(Base):
+    __tablename__ = "season"
+    __table_args__ = (UniqueConstraint("media_id", "season_number"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    media_id: Mapped[int] = mapped_column(
+        ForeignKey("media_item.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    season_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    episode_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+
+class Episode(Base):
+    __tablename__ = "episode"
+    __table_args__ = (UniqueConstraint("season_id", "episode_number"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    season_id: Mapped[int] = mapped_column(
+        ForeignKey("season.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    episode_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    air_date: Mapped[date | None] = mapped_column(Date)
+    title: Mapped[str] = mapped_column(Text, default="", nullable=False)
+
+
+class Subscription(Base):
+    __tablename__ = "subscription"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    media_id: Mapped[int] = mapped_column(ForeignKey("media_item.id"), nullable=False, index=True)
+    scope: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    quality_pref: Mapped[str] = mapped_column(
+        Text, default='{"min_bucket":"1080p"}', nullable=False
+    )
+    state: Mapped[str] = mapped_column(String, default="active", nullable=False, index=True)
+    source: Mapped[str] = mapped_column(String, default="manual", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+
+class DiscoveredResource(Base):
+    __tablename__ = "discovered_resource"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    subscription_id: Mapped[int] = mapped_column(
+        ForeignKey("subscription.id"), nullable=False, index=True
+    )
+    provider: Mapped[str] = mapped_column(String, nullable=False)
+    share_url: Mapped[str] = mapped_column(Text, nullable=False)
+    dedup_key: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    idempotency_key: Mapped[str | None] = mapped_column(String)
+    score: Mapped[float] = mapped_column(Float, default=0, nullable=False)
+    state: Mapped[str] = mapped_column(String, default="new", nullable=False, index=True)
+    payload: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+
+class TransferTask(Base):
+    __tablename__ = "transfer_task"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    idempotency_key: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    subscription_id: Mapped[int | None] = mapped_column(ForeignKey("subscription.id"), index=True)
+    resource_id: Mapped[int | None] = mapped_column(
+        ForeignKey("discovered_resource.id"), index=True
+    )
+    state: Mapped[str] = mapped_column(String, default="queued", nullable=False, index=True)
+    attempt: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime, index=True)
+    dead_letter: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_error: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+
+class LibraryFile(Base):
+    __tablename__ = "library_file"
+    __table_args__ = (UniqueConstraint("episode_id", "path"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    episode_id: Mapped[int] = mapped_column(ForeignKey("episode.id"), nullable=False, index=True)
+    path: Mapped[str] = mapped_column(Text, nullable=False)
+    size: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    sha1: Mapped[str | None] = mapped_column(String)
+    landed_verified: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+
+class StrmRecord(Base):
+    __tablename__ = "strm_record"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    library_file_id: Mapped[int] = mapped_column(
+        ForeignKey("library_file.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    strm_path: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+
+class Account(Base):
+    __tablename__ = "account"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    provider: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    credential: Mapped[str] = mapped_column(Text, nullable=False)
+    quota_state: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+
+class Setting(Base):
+    __tablename__ = "setting"
+
+    key: Mapped[str] = mapped_column(String, primary_key=True)
+    value: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )

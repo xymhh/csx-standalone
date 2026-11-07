@@ -8,7 +8,8 @@ import secrets
 from sqlalchemy import select
 
 from csx.infra.db import SessionLocal, engine
-from csx.infra.models import AdminUser, Base
+from csx.infra.migrations import upgrade_to_head
+from csx.infra.models import AdminUser
 from csx.infra.security import hash_password
 from csx.infra.settings import settings
 
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def init_db() -> None:
-    Base.metadata.create_all(bind=engine)
+    upgrade_to_head(engine)
 
 
 def ensure_admin() -> None:
