@@ -338,3 +338,22 @@ class TestSeasonProgress:
         scope = SubscriptionScope(mode=ScopeMode.ALL)
         progress = season_progress(seasons, owned, scope)
         assert progress == {1: (3, 5), 2: (5, 10)}
+
+
+class TestIterableInputs:
+    """规格要求 seasons 参数接受 Iterable，生成器也只能被消费一次。"""
+
+    def test_missing_episodes_accepts_generator(self):
+        seasons = (
+            Season(number=1, episodes=[Episode(key=EpisodeKey(1, i)) for i in range(1, 4)])
+            for _ in range(1)
+        )
+        result = missing_episodes(seasons, {EpisodeKey(1, 1)}, SubscriptionScope())
+        assert result == [EpisodeKey(1, 2), EpisodeKey(1, 3)]
+
+    def test_season_progress_accepts_generator(self):
+        seasons = (
+            Season(number=1, episodes=[Episode(key=EpisodeKey(1, i)) for i in range(1, 4)])
+            for _ in range(1)
+        )
+        assert season_progress(seasons, {EpisodeKey(1, 1)}, SubscriptionScope()) == {1: (1, 3)}

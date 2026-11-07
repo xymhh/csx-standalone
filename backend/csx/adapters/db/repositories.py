@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from csx.domain.media import Episode, EpisodeKey, MediaItem, MediaType, Season
@@ -179,7 +179,11 @@ class SqlAlchemyTaskRepository:
             select(TransferTask)
             .where(
                 TransferTask.state.in_((TaskState.QUEUED.value, TaskState.RETRY_WAIT.value)),
-                TransferTask.next_retry_at <= now,
+                # 新建任务 next_retry_at 为 NULL，表示「立刻可执行」
+                or_(
+                    TransferTask.next_retry_at.is_(None),
+                    TransferTask.next_retry_at <= now,
+                ),
             )
             .order_by(TransferTask.next_retry_at, TransferTask.id)
             .limit(limit)

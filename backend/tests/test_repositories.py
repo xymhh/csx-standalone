@@ -90,3 +90,10 @@ def test_due_only_returns_queued_or_retry_tasks_due_by_now(session) -> None:
     session.add_all((due, future, retry))
     session.flush()
     assert {row["idempotency_key"] for row in tasks.due(now)} == {"due", "retry"}
+
+
+def test_due_includes_freshly_created_queued_task(session) -> None:
+    """新建任务 next_retry_at 为 NULL，必须立刻可被调度器捞到。"""
+    tasks = SqlAlchemyTaskRepository(session)
+    task_id, _ = tasks.create_or_get("fresh")
+    assert [row["id"] for row in tasks.due(datetime(2026, 11, 7, 12))] == [task_id]

@@ -129,13 +129,17 @@ class SubscriptionScope:
         aired_episodes_for_season: list[Episode],
     ) -> bool:
         """在 LATEST 模式下，判断是否应包含该集。"""
-        if self.latest_count <= 0:
+        latest_numbers = self._latest_numbers(aired_episodes_for_season)
+        if latest_numbers is None:
             return True
-        # 按 episode number 降序排序
-        sorted_aired = sorted(aired_episodes_for_season, key=lambda e: e.key.episode, reverse=True)
-        latest_eps = sorted_aired[: self.latest_count]
-        latest_ep_numbers = {e.key.episode for e in latest_eps}
-        return episode.key.episode in latest_ep_numbers
+        return episode.key.episode in latest_numbers
+
+    def _latest_numbers(self, aired_in_season: list[Episode]) -> set[int] | None:
+        """LATEST 模式下该季被接受的集号集合；非 LATEST 或 latest_count<=0 返回 None（不设限）。"""
+        if self.mode is not ScopeMode.LATEST or self.latest_count <= 0:
+            return None
+        ordered = sorted(aired_in_season, key=lambda e: e.key.episode, reverse=True)
+        return {episode.key.episode for episode in ordered[: self.latest_count]}
 
 
 def aired_episodes(
@@ -172,49 +176,23 @@ def missing_episodes(
     """返回已播 ∧ scope.accepts ∧ 不在 owned 的集（升序、去重）。"""
     owned_set: set[EpisodeKey] = set(owned)
     check_today = today or date.today()
+    season_list = tuple(seasons)
 
-    all_aired = aired_episodes(seasons, check_today)
-
-    result: list[EpisodeKey] = []
-    for key in all_aired:
-        # 找到对应的剧集对象（用于 LATEST 模式的判断）
-        episode_obj: Episode | None = None
-        for season in seasons:
-            if season.number == key.season:
-                for ep in season.episodes:
-                    if ep.key == key:
-                        episode_obj = ep
-                        break
-                if episode_obj:
-                    break
-
-        if episode_obj is None:
-            continue
-
-        # 季过滤 + mode 过滤
-        if not scope.accepts(key):
-            continue
-
-        # LATEST 模式特殊处理
-        if scope.mode == ScopeMode.LATEST and episode_obj is not None:
-            aired_for_season = scope._aired_in_season(
-                next((s for s in seasons if s.number == key.season), None), check_today
-            )
-            if not scope._should_include_latest(episode_obj, aired_for_season):
+    result: set[EpisodeKey] = set()
+    for season in season_list:
+        aired = scope._aired_in_season(season, check_today)
+        latest_numbers = scope._latest_numbers(aired)
+        for episode in aired:
+            key = episode.key
+            if not scope.accepts(key):
                 continue
+            if latest_numbers is not None and key.episode not in latest_numbers:
+                continue
+            if key in owned_set:
+                continue
+            result.add(key)
 
-        if key not in owned_set:
-            result.append(key)
-
-    # 已排序且去重（all_aired 已经排过，但为了安全再去一次）
-    seen: set[tuple[int, int]] = set()
-    unique: list[EpisodeKey] = []
-    for k in result:
-        kt = (k.season, k.episode)
-        if kt not in seen:
-            seen.add(kt)
-            unique.append(k)
-    return unique
+    return sorted(result)
 
 
 def season_progress(
@@ -229,28 +207,17 @@ def season_progress(
 
     progress: dict[int, tuple[int, int]] = {}
 
-    for season in seasons:
-        # 该季所有剧集
-        all_eps = season.episodes
-        if not all_eps:
-            progress[season.number] = (0, 0)
-            continue
-
-        # 该季已播出集
+    for season in tuple(seasons):
         aired = scope._aired_in_season(season, check_today)
+        latest_numbers = scope._latest_numbers(aired)
 
-        # 该季已播出且被 scope 接受的集
-        filtered: list[Episode] = []
-        for ep in aired:
-            key = ep.key
-            if scope.mode == ScopeMode.LATEST and not scope._should_include_latest(ep, aired):
-                continue
-            if scope.accepts(key):
-                filtered.append(ep)
-
-        should = len(filtered)
-        has = sum(1 for ep in filtered if ep.key in owned_set)
-
-        progress[season.number] = (has, should)
+        accepted = [
+            episode
+            for episode in aired
+            if scope.accepts(episode.key)
+            and (latest_numbers is None or episode.key.episode in latest_numbers)
+        ]
+        has = sum(1 for episode in accepted if episode.key in owned_set)
+        progress[season.number] = (has, len(accepted))
 
     return progress

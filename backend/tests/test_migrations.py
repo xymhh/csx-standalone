@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 
 from sqlalchemy import create_engine, inspect
 
@@ -45,3 +46,11 @@ def test_upgrade_is_repeatable_and_preserves_existing_admin(tmp_path) -> None:
     with sqlite3.connect(legacy_path) as connection:
         assert connection.execute("SELECT username FROM admin_user").fetchone() == ("existing",)
     legacy_engine.dispose()
+
+
+def test_script_location_points_at_real_migrations_dir() -> None:
+    from csx.infra.migrations import script_location
+
+    location = script_location()
+    assert (Path(location) / "env.py").is_file()
+    assert (Path(location) / "versions" / "0001_initial_schema.py").is_file()

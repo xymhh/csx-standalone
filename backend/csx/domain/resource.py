@@ -13,11 +13,7 @@ def quality_bucket(resolution: str | int | None) -> str:
         return "sd"
 
     # 规范化：先去空格，转小写
-    try:
-        res_str = str(resolution).strip().lower()
-    except Exception:
-        return "sd"
-
+    res_str = str(resolution).strip().lower()
     if not res_str:
         return "sd"
 
