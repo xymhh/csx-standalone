@@ -54,6 +54,7 @@ ignore = ["E501", "RUF001", "RUF002", "RUF003", "UP046"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = [".", "tests"]
 addopts = "-q -m 'not net'"
 markers = ["net: real network smoke tests (excluded by default)"]
 
