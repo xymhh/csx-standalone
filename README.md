@@ -1,73 +1,123 @@
 # CloudSubscribeX 独立版
 
-把 `CloudSubscribeX`（原 MoviePilot 插件）重做成**不依赖 MoviePilot** 的独立项目：自有后端、自有 UI、重新设计的架构与界面。
-
-> 状态：**P0.5 鉴权 + 公网上线完成**（2026-11-07）——管理员账户/会话登录/登录页已上线 https://csx.xymhh.eu.org ，后端 16 项测试全绿、`ruff` 干净，前端 `typecheck` + `build` 通过。
+CloudSubscribeX 是独立运行的网盘订阅、搜索、转存、媒体整理与 STRM 管理系统，不依赖 MoviePilot。项目按 P0–P7 阶段完成：后端分层与 SQLite 持久化、网盘/搜索源 vendor 迁入、命名与转存编排、鉴权及资源 API、Vue 3 管理台、签到/STRM/通知/媒体服务器集成，以及 P7 备份恢复、崩溃任务自愈和迁移往返演练。
 
 ## 快速开始
 
+需要 Python 3.12、Node.js 22（仅开发前端需要）和 Docker（可选）。
+
 ```bash
-# 后端（http://127.0.0.1:8000）
-cd backend && pip install -e ".[dev]" && uvicorn csx.api.main:app --reload
+# 后端 API，工作目录为 backend
+cd backend
+python3.12 -m venv .venv
+. .venv/bin/activate
+pip install -e '.[dev]'
+export CSX_DATA_DIR="$PWD/data"
+export CSX_ADMIN_PASSWORD='请设置强口令'
+export CSX_SECRET_KEY='请设置独立的长随机密钥'
+uvicorn csx.api.main:app --host 127.0.0.1 --port 8000
 
-# 前端（http://127.0.0.1:5173，已配 /api 代理）
-cd web && npm install --include=dev && npm run dev
+# 前端开发服务器，另开终端
+cd web
+npm ci --include=dev
+npm run dev
 
-# 单容器
-docker compose up --build
+# 一体化容器（在项目根目录）
+docker compose up --build -d
 ```
 
-## 为什么要有这个项目
+首次启动会自动执行数据库迁移并创建管理员。若未设置 `CSX_ADMIN_PASSWORD`，随机初始口令写入 `<CSX_DATA_DIR>/initial-admin-password.txt`（权限 0600）。生产部署应使用 HTTPS 反向代理、持久化数据卷和强 `CSX_SECRET_KEY`。
 
-原插件跑在 MoviePilot 进程里，43 个文件直接挂在宿主内脏上（订阅表、整理链、片名识别），MP 每次大版本升级都会断。本项目把这些能力收回自己手里。
+## 功能与界面
 
-## 能继承多少
+- 管理台提供 Dashboard、Progress、Baseline、Radar、Candidates、Tasks、History、Media、Settings、Search 十个页面。
+- 管理订阅与候选，调度网盘转存任务，跟踪进度与历史；支持命名解析、画质洗版判断、重试和死信状态。
+- 支持 P2 vendor 搬运的网盘驱动与搜索源；账号凭据加密存储，API 不回显明文。
+- 支持多账号签到及历史、STRM 生成、Webhook/Telegram/飞书通知、Emby/Jellyfin 探测和媒体库刷新。
+- 系统维护接口支持 SQLite 在线热备和备份清单；恢复可使用 CLI。
+- 后端全部测试使用离线 Fake/Mock；带 `net` 标记的真实驱动 smoke 测试默认跳过。
 
-原插件 108,949 行 Python 中，**约 61% 可直接继承**：
+## 环境变量速查
 
-| 分层 | 行数 | 处理方式 |
-|---|---:|---|
-| 网盘驱动（7 家） | 15,165 | 原样搬 |
-| 搜索源（14 个） | 24,617 | 原样搬 |
-| 自有 SQLite 层 | 3,213 | 原样搬 |
-| 订阅源 / utils | 5,714 | 小改 |
-| 业务服务 / 路由层 | 17,929 | 改造 |
-| 同步整理 / 插件入口 / 其余 | 42,311 | 重写 |
+应用配置由 `CSX_` 前缀的环境变量覆盖。空值代表未设置；列表型配置可按 Pydantic Settings 支持的 JSON 形式提供。
 
-## 鉴权
-
-单用户管理员账户，其余接口全部需要登录。
-
-| 环境变量 | 默认 | 说明 |
+| 环境变量 | 默认值 | 用途 |
 | --- | --- | --- |
-| `CSX_ADMIN_USER` | `admin` | 首次启动创建的管理员用户名 |
-| `CSX_ADMIN_PASSWORD` | 空 | 首次启动用的初始口令；留空则随机生成并写入 `<data_dir>/initial-admin-password.txt`（0600） |
-| `CSX_COOKIE_SECURE` | `false` | 走 HTTPS 部署时置 `true`（cookie 加 `Secure`） |
-| `CSX_SESSION_TTL_DAYS` | `7` | 会话有效期 |
-| `CSX_LOGIN_MAX_ATTEMPTS` | `5` | 同一 IP 在窗口内的失败次数上限，超出返回 429 |
-| `CSX_LOGIN_WINDOW_SECONDS` | `900` | 失败计数窗口 |
+| `CSX_DATA_DIR` | `data` | SQLite 数据库、初始管理员口令和默认备份目录所在的数据目录 |
+| `CSX_LOG_LEVEL` | `INFO` | 日志等级 |
+| `CSX_CORS_ORIGINS` | `http://localhost:5173` | 允许的浏览器来源列表 |
+| `CSX_WEB_DIST` | `web/dist` | 已构建前端静态文件目录 |
+| `CSX_TRANSFER_ROOT` | `CSX` | 网盘转存根目录 |
+| `CSX_LIBRARY_ROOT` | 空 | 整理后的媒体库根目录 |
+| `CSX_SECRET_KEY` | 空 | 账号凭据加密密钥；配置账号前必须设置并长期保管 |
+| `CSX_ADMIN_USER` | `admin` | 首次启动建立的管理员用户名 |
+| `CSX_ADMIN_PASSWORD` | 空 | 首次启动管理员口令；留空时生成随机口令文件 |
+| `CSX_COOKIE_SECURE` | `false` | HTTPS 部署设为 `true`，让登录 cookie 带 Secure 属性 |
+| `CSX_SESSION_TTL_DAYS` | `7` | 登录会话有效天数 |
+| `CSX_LOGIN_MAX_ATTEMPTS` | `5` | 登录失败次数限制 |
+| `CSX_LOGIN_WINDOW_SECONDS` | `900` | 登录失败计数窗口（秒） |
+| `CSX_115_COOKIE` | 空 | 115 驱动的环境变量凭据回退值；优先使用管理界面加密保存的账号 |
+| `CSX_QUARK_COOKIE` | 空 | 夸克驱动的环境变量凭据回退值；优先使用管理界面加密保存的账号 |
+| `CSX_MIGRATIONS_DIR` | 自动定位 | Alembic `migrations/` 目录；仅源码/特殊打包部署需手动指定 |
+| `CLOUDSUBSCRIBE_BROWSER_IDLE_SECONDS` | vendor 默认值 | 浏览器搜索源的空闲配置，仅在启用对应搜索源时使用 |
 
-- 口令用标准库 `scrypt`（n=2^14, r=8, p=1，每用户独立 salt）哈希，库里不存明文。
-- 会话令牌 32 字节随机串，只把 `sha256` 落库；cookie 为 `HttpOnly + SameSite=Lax + Secure`。
-- 接口：`POST /api/v1/auth/login`、`POST /api/v1/auth/logout`、`GET /api/v1/auth/me`、`POST /api/v1/auth/password`（改密后旧会话全部失效）。
-- 白名单只有 `/health` 与 `/api/v1/auth/login`，其余 `/api/*` 未登录一律 401。
+签到、STRM、通知、媒体服务器、搜索源等业务配置在管理界面的分组设置或账号页中维护，不是进程环境变量。不要把密钥写进仓库或日志。修改 `CSX_SECRET_KEY` 会导致此前加密的账号凭据无法解密。
 
-## 部署
+## 运维命令
 
-- 公网：**https://csx.xymhh.eu.org**（Cloudflare 隧道 `berohost` → `http://csx-standalone:8000`）
-- 法兰克福 1Panel：容器 `csx-standalone`，内网 `http://csx-standalone:8000`（`1panel-network`，无宿主端口）
-- 代码 `/opt/.1panel_clash/files/b249cde255f8453fa0d2ff46f7e76f65/csx-standalone`（**与 MoviePilot 同级**；1Panel 面板里显示为 `/opt/1panel/apps/csx-standalone`），compose `/opt/1panel/docker/compose/csx-standalone/docker-compose.yml`，数据卷 `csx-standalone_data:/data`
-- 发布：上传仓库 tar 到 1Panel `/tmp` → 一次性容器 `tar xzf` 解到上面的代码目录 → 用 `docker:27-cli` 容器（挂 `docker.sock` + `/:/host`）跑 `tar c . | docker build -t csx-standalone:pN -` → `compose/operate up`。**compose 里只写 `image:`，不写 `build.context`**（该路径守护进程解析不到），详见 [路径拓扑与发布方式](docs/summary/2026-11-07-1panel路径拓扑与发布方式.md)
+```bash
+# 查看服务状态和日志
 
-详见 [部署记录](docs/test/2026-11-07-部署到法兰克福.md)、[管理员账户与域名记录](docs/test/2026-11-07-管理员账户与域名.md)、[P1 重建部署验证](docs/test/2026-11-07-P1-重建部署验证.md)、[1Panel 路径拓扑与发布方式](docs/summary/2026-11-07-1panel路径拓扑与发布方式.md)。
+docker compose ps
+docker compose logs -f csx
 
-## 文档
+# 后端质量门禁（在 backend/）
+/app/venv312/bin/python -m pytest -ra
+/app/venv312/bin/python -m ruff check .
+/app/venv312/bin/ruff format --check csx/infra csx/tools csx/api tests
 
-- [功能基线与资产盘点](docs/plan/2026-11-07-功能基线与资产盘点.md) — 95 个路由、226 个配置键、资产分级、许可证约束、5 个待定架构问题
-- [调研](docs/plan/2026-11-07-独立版-调研.md) — 11 个现成项目对比，结论＝拼装
-- [架构](docs/plan/2026-11-07-独立版-架构.md) — 已冻结：分层、数据模型、API、任务机、前端 10 页、8 阶段 56 人日
-- [管理员账户与域名](docs/test/2026-11-07-管理员账户与域名.md) — P0.5 鉴权实现 + 公网上线实测证据
+# 前端门禁（在 web/）
+npm run typecheck
+npm run build
+
+# 在线热备（在 backend/，容器内使用同一份 /data 挂载）
+/app/venv312/bin/python -m csx.tools.backup
+
+# 恢复前先停止应用，避免有其他进程继续访问数据库；恢复后再启动
+/app/venv312/bin/python -m csx.tools.restore /data/backups/csx-backup-YYYYMMDD-HHMMSS.db.gz
+```
+
+系统 API：`POST /api/v1/system/backup` 创建备份，`GET /api/v1/system/backups` 列出备份；两者都要求管理员登录。文件默认保存于 `<CSX_DATA_DIR>/backups/`，包括 gzip 数据库、SHA256 与表行数清单。恢复命令先验证 gzip、SQLite 文件头、`PRAGMA integrity_check` 和可用的 SHA256 manifest，然后为当前数据库生成 `<database>.pre-restore.bak`，最后原子替换数据库文件。恢复会使已创建的 SQLAlchemy engine 失效，因此恢复 CLI 必须在服务停止时运行。
+
+启动时 Alembic 自动迁移到最新 revision。若进程崩溃留下 `running` 任务，重启会将 attempt 小于 3 的任务重排为 `retry_wait`，attempt 达到 3 的任务转入 `dead_letter`，并记录 `PROCESS_CRASHED_ORPHAN`。
+
+## 常见故障排查
+
+| 现象 | 常见原因 | 处理方法 |
+| --- | --- | --- |
+| 登录后接口仍返回 401 | cookie 域、反向代理 HTTPS 或 CSRF/来源配置不匹配 | 检查浏览器 cookie、代理转发头和 CORS 来源；HTTPS 部署启用 `CSX_COOKIE_SECURE` |
+| 启动报告缺少/错误管理员口令 | 数据卷中管理员已经存在，或首次启动未配置口令 | 核对 `CSX_DATA_DIR` 数据卷；初次部署预设 `CSX_ADMIN_PASSWORD`，否则读取权限为 0600 的初始口令文件 |
+| 网盘凭据无法解密 | `CSX_SECRET_KEY` 为空或与写入凭据时不同 | 恢复原密钥；不要通过更换密钥尝试解密旧凭据 |
+| 迁移找不到 scripts | 打包环境无法自动定位迁移目录 | 设置 `CSX_MIGRATIONS_DIR` 为包含 `env.py` 和 `versions/` 的目录 |
+| 在线备份失败或磁盘空间不足 | 数据目录不可写、空间不足、SQLite 文件不是普通文件型数据库 | 检查容器 `/data` 卷权限和磁盘余量，检查服务日志；不要删除唯一备份 |
+| 恢复被完整性校验拒绝 | gzip/SQLite 内容损坏或 manifest 校验和不一致 | 从另一个备份副本恢复；保留损坏文件用于诊断，不要手工覆盖活动数据库 |
+| 任务重启后进入 retry_wait/dead_letter | 启动时识别到上次运行中的孤儿任务 | 查看任务历史和 `PROCESS_CRASHED_ORPHAN`，确认网盘端是否已完成操作后再重试 |
+| STRM 创建成功但媒体服务器未更新 | 媒体服务器地址/API key 配置错误或网络不可达 | 在 Settings 核对 Emby/Jellyfin 配置，并检查 `/api/v1/library/servers` 返回的探测状态 |
+| 前端页面/API 版本不匹配 | 后端部署了新版本但静态资源仍旧 | 重新构建前端并部署新镜像，清理浏览器缓存后重载 |
+
+## 项目文档
+
+- [总体架构](docs/plan/2026-11-07-独立版-架构.md)
+- [P1 后端任务书](docs/plan/2026-11-07-P1-任务书.md)
+- [P2 网盘驱动与搜索源搬运](docs/plan/2026-11-07-P2-任务书.md)
+- [P3 命名与转存编排](docs/plan/2026-11-08-P3-任务书.md)
+- [P4 API 与后台调度](docs/plan/2026-11-08-P4-任务书.md)
+- [P5 前端管理台](docs/plan/2026-11-08-P5-任务书.md)
+- [P6 签到、STRM 与集成能力验收](docs/test/2026-11-08-P6-验收.md)
+- [P7 稳定化验收](docs/test/2026-11-08-P7-验收.md)
+- [部署记录](docs/test/2026-11-07-部署到法兰克福.md)
+- [路径拓扑与发布方式](docs/summary/2026-11-07-1panel路径拓扑与发布方式.md)
 
 ## 许可证
 
-**GPLv3**（用户 2026-11-07 确认）。原项目同为 GPLv3，43,000 行可直接继承；不复制 AGPL 项目代码。
+项目使用 GPLv3。`backend/csx/vendor/` 中的上游驱动与搜索源保留其各自声明的版权和许可证信息；分发时请一并保留相关声明。
