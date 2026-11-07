@@ -1,0 +1,1 @@
+<template><div class="w-full overflow-x-auto rounded-card border border-border"><table class="w-full text-left text-sm"><slot /></table></div></template>

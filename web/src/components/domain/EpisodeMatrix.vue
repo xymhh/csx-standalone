@@ -1,0 +1,4 @@
+<script setup lang="ts">
+import type { ProgressSeason } from '@/lib/api';defineProps<{seasons:ProgressSeason[]}>()
+</script>
+<template><div class="space-y-4"><section v-for="season in seasons" :key="season.season" class="rounded-md border border-border p-3"><h4 class="mb-3 text-sm font-medium">第 {{season.season}} 季</h4><div class="flex flex-wrap gap-2"><span v-for="ep in season.episodes" :key="ep.episode" class="grid h-10 min-w-10 place-items-center rounded-md border px-2 text-xs" :title="ep.title??`第 ${ep.episode} 集`" :class="ep.owned?'border-status-ready/50 bg-status-ready/10 text-status-ready':ep.aired?'border-status-missing/50 bg-status-missing/10 text-status-missing':'border-border bg-surface-2 text-muted'">{{ep.episode}}</span></div></section></div></template>

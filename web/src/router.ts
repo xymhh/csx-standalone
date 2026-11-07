@@ -13,8 +13,19 @@ const router = createRouter({
     },
     {
       path: '/',
-      name: 'home',
-      component: () => import('@/pages/HomePage.vue'),
+      component: () => import('@/components/layout/AppLayout.vue'),
+      children: [
+        { path: '', name: 'dashboard', component: () => import('@/pages/DashboardPage.vue') },
+        { path: 'progress', name: 'progress', component: () => import('@/pages/ProgressPage.vue') },
+        { path: 'baseline', name: 'baseline', component: () => import('@/pages/BaselinePage.vue') },
+        { path: 'radar', name: 'radar', component: () => import('@/pages/RadarPage.vue') },
+        { path: 'candidates', name: 'candidates', component: () => import('@/pages/CandidatesPage.vue') },
+        { path: 'tasks', name: 'tasks', component: () => import('@/pages/TasksPage.vue') },
+        { path: 'history', name: 'history', component: () => import('@/pages/HistoryPage.vue') },
+        { path: 'media', name: 'media', component: () => import('@/pages/MediaPage.vue') },
+        { path: 'settings', name: 'settings', component: () => import('@/pages/SettingsPage.vue') },
+        { path: 'search', name: 'search', component: () => import('@/pages/SearchPage.vue') },
+      ],
     },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
@@ -32,7 +43,7 @@ router.beforeEach(async (to) => {
 
 window.addEventListener('csx:unauthorized', () => {
   if (router.currentRoute.value.name !== 'login') {
-    router.push({ name: 'login' })
+    void router.push({ name: 'login' })
   }
 })
 

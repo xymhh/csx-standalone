@@ -1,0 +1,4 @@
+<script setup lang="ts">
+import type { ProgressItem } from '@/lib/api';import Badge from '@/components/ui/Badge.vue';defineProps<{media:ProgressItem}>()
+</script>
+<template><article class="rounded-card border border-border bg-surface p-4"><div class="flex items-start justify-between gap-3"><div><h3 class="font-semibold">{{media.title}}</h3><p class="mt-1 text-xs text-muted">{{media.owned_count}} / {{media.aired_count}} 集已入库</p></div><Badge :tone="media.missing.length?'warn':'good'">{{media.missing.length}} 集缺失</Badge></div><div class="mt-4 h-2 overflow-hidden rounded-full bg-surface-2"><div class="h-full bg-status-ready" :style="{width:media.aired_count?`${Math.round(media.owned_count/media.aired_count*100)}%`:'0%'}"/></div><RouterLink :to="`/progress#media-${media.media_id}`" class="mt-3 inline-flex min-h-[44px] items-center text-sm text-primary">查看季集明细 →</RouterLink></article></template>

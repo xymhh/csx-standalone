@@ -1,0 +1,4 @@
+<script setup lang="ts">
+import { onMounted,onUnmounted } from 'vue';const props=defineProps<{open:boolean;title:string}>();const emit=defineEmits<{close:[]}>();function key(e:KeyboardEvent){if(e.key==='Escape')emit('close')}onMounted(()=>window.addEventListener('keydown',key));onUnmounted(()=>window.removeEventListener('keydown',key))
+</script>
+<template><Teleport to="body"><div v-if="open" class="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 p-4" @click.self="emit('close')"><section role="dialog" aria-modal="true" class="w-full max-w-lg rounded-card border border-border bg-surface p-5 shadow-xl"><header class="mb-4 flex items-center justify-between"><h2 class="text-lg font-semibold">{{title}}</h2><button class="min-h-[44px] min-w-[44px] rounded-md text-muted hover:bg-surface-2" aria-label="关闭" @click="emit('close')">×</button></header><slot /></section></div></Teleport></template>

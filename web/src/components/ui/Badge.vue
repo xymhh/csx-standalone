@@ -1,0 +1,4 @@
+<script setup lang="ts">
+import { computed } from 'vue';import { cn } from '@/lib/utils';const props=withDefaults(defineProps<{tone?:'default'|'good'|'warn'|'bad'|'muted'}>(),{tone:'default'});const c=computed(()=>cn('inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium',{'border-primary/30 bg-primary/10 text-primary':props.tone==='default','border-status-ready/30 bg-status-ready/10 text-status-ready':props.tone==='good','border-status-waiting/30 bg-status-waiting/10 text-status-waiting':props.tone==='warn','border-status-missing/30 bg-status-missing/10 text-status-missing':props.tone==='bad','border-border bg-surface-2 text-muted':props.tone==='muted'}))
+</script>
+<template><span :class="c"><slot /></span></template>
