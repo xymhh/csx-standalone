@@ -110,6 +110,34 @@ class TmdbClient:
     """TMDB 元数据与热播推荐封装。"""
 
     @classmethod
+    def diagnose(cls) -> dict[str, Any]:
+        key = _get_api_key()
+        if not key:
+            return {"configured": False, "valid": False, "message": "未配置 TMDB API Key"}
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+            "Accept": "application/json",
+        }
+        url = f"{TMDB_API_BASE}/configuration?api_key={key}"
+        try:
+            resp = requests.get(url, headers=headers, timeout=8)
+            if resp.status_code == 200:
+                return {"configured": True, "valid": True, "message": "连通正常", "key_prefix": f"{key[:6]}..."}
+            return {
+                "configured": True,
+                "valid": False,
+                "message": f"TMDB 接口返回错误码 {resp.status_code}: {resp.text[:100]}",
+                "key_prefix": f"{key[:6]}...",
+            }
+        except Exception as error:
+            return {
+                "configured": True,
+                "valid": False,
+                "message": f"连接异常: {type(error).__name__} {error}",
+                "key_prefix": f"{key[:6]}...",
+            }
+
+    @classmethod
     def get_trending(cls) -> list[dict[str, Any]]:
         key = _get_api_key()
         if not key:

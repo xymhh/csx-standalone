@@ -115,6 +115,26 @@ async function subscribeItem() {
       />
     </div>
 
+    <!-- 空状态优雅提示 -->
+    <div
+      v-else-if="!items.length"
+      class="rounded-2xl border border-dashed border-border/80 bg-surface/30 p-16 text-center space-y-3"
+    >
+      <Compass class="mx-auto h-10 w-10 text-subtle/50" />
+      <h3 class="text-base font-semibold text-fg">未能拉取到 TMDB 推荐榜单</h3>
+      <p class="text-xs text-muted max-w-sm mx-auto">
+        当前未配置 TMDB API 密钥，或服务器连接 TMDB 网络超时。你可以前往系统设置配置专属密钥，或者直接在搜索框搜影视。
+      </p>
+      <div class="flex items-center justify-center gap-3 pt-2">
+        <Button variant="outline" size="sm" @click="fetchItems">
+          重试拉取
+        </Button>
+        <RouterLink to="/settings">
+          <Button size="sm">前往系统设置配置 TMDB</Button>
+        </RouterLink>
+      </div>
+    </div>
+
     <!-- 2:3 电影海报流 -->
     <div v-else class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
       <article

@@ -874,6 +874,8 @@ def diagnose(request: Request):
                 )
     except Exception as error:
         account_checks = [{"error": str(error)}]
+    from csx.adapters.media.tmdb import TmdbClient
+
     return ok(
         {
             "database": {"ok": db_ok, "size_bytes": db_size, "error": db_error},
@@ -884,6 +886,7 @@ def diagnose(request: Request):
                 "waiting_queue_depth": scheduler.waiting_queue_depth if scheduler else 0,
             },
             "disk": disk_result,
+            "tmdb": TmdbClient.diagnose(),
         }
     )
 
