@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from alembic import op
-from sqlalchemy import Boolean, Column, inspect
+from sqlalchemy import text
 
 revision = "0007"
 down_revision = "0006"
@@ -12,18 +12,35 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # 彻底重建 account 表，彻底移除 UNIQUE(provider)
     bind = op.get_bind()
-    columns = {column["name"] for column in inspect(bind).get_columns("account")}
-    
-    # SQLite 移除 UNIQUE 约束需要重建表或 batch_alter_table
-    with op.batch_alter_table("account", recreate="always") as batch_op:
-        if "is_enabled" not in columns:
-            batch_op.add_column(Column("is_enabled", Boolean, nullable=False, server_default="1"))
-        if "is_primary" not in columns:
-            batch_op.add_column(Column("is_primary", Boolean, nullable=False, server_default="0"))
+    bind.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS account_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                provider TEXT NOT NULL,
+                name TEXT NOT NULL DEFAULT '',
+                credential TEXT NOT NULL,
+                is_enabled BOOLEAN NOT NULL DEFAULT 1,
+                is_primary BOOLEAN NOT NULL DEFAULT 0,
+                quota_state TEXT NOT NULL DEFAULT '{}',
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+    )
+    bind.execute(
+        text(
+            """
+            INSERT INTO account_new (id, provider, name, credential, is_enabled, is_primary, quota_state, created_at)
+            SELECT id, provider, name, credential, 1, 0, quota_state, created_at FROM account;
+            """
+        )
+    )
+    bind.execute(text("DROP TABLE account;"))
+    bind.execute(text("ALTER TABLE account_new RENAME TO account;"))
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("account", recreate="always") as batch_op:
-        batch_op.drop_column("is_primary")
-        batch_op.drop_column("is_enabled")
+    pass
