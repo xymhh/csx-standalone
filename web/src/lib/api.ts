@@ -71,7 +71,9 @@ export interface ShareInspectFile { id: string; name: string; size: number; is_d
 export interface LibraryFile { id: number; media_id: number; path: string; size: number; sha1: string; quality_bucket: string; provider?: string; created_at: string }
 export interface LibraryServer { provider: string; configured: boolean; valid: boolean | null }
 export interface AccountProfile {
+  connected?: boolean
   user_name?: string
+  avatar?: string
   is_vip?: boolean
   vip_expire?: string
   total_space?: string

@@ -169,7 +169,7 @@ class DriveRegistry:
 
     @staticmethod
     def get_account_profile(provider: str, credential: str) -> dict:
-        """Fetch account capacity, nickname, and VIP info behind drive adapter boundary."""
+        """Fetch account capacity, nickname, avatar, and VIP info matching CS AccountInfo component."""
         provider = provider.lower()
         if provider == "115":
             try:
@@ -178,33 +178,43 @@ class DriveRegistry:
                 mgr = P115ClientManager(credential)
                 user_res = mgr._rate_limited_call(mgr.client.user_my_info)
                 user_data = (user_res or {}).get("data") or {}
+                vip_data = user_data.get("vip") or {}
+                face_data = user_data.get("face") or {}
                 space_res = mgr._rate_limited_call(mgr.client.fs_index_info, payload=0)
                 space_data = ((space_res or {}).get("data") or {}).get("space_info") or {}
-                vip_data = user_data.get("vip") or {}
                 is_forever = bool(vip_data.get("is_forever"))
                 is_vip = bool(vip_data.get("is_vip")) or is_forever
                 return {
-                    "user_name": str(user_data.get("uname") or ""),
+                    "connected": True,
+                    "user_name": str(user_data.get("uname") or "未知用户"),
+                    "avatar": str(face_data.get("face_s") or ""),
                     "is_vip": is_vip,
+                    "is_forever_vip": is_forever,
                     "vip_expire": "永久" if is_forever else str(vip_data.get("expire_str") or ""),
                     "total_space": str((space_data.get("all_total") or {}).get("size_format") or ""),
                     "used_space": str((space_data.get("all_use") or {}).get("size_format") or ""),
                     "remaining_space": str((space_data.get("all_remain") or {}).get("size_format") or ""),
                 }
-            except Exception:
-                return {}
+            except Exception as e:
+                return {"connected": False, "error": str(e)}
         if provider == "quark":
             try:
                 from csx.vendor.drive.quark.client import QuarkClient
 
                 qc = QuarkClient(cookie=credential)
-                cap = qc.get_capacity() or {}
+                res = qc.get_account_info() or {}
+                user = res.get("user") or {}
+                storage = res.get("storage") or {}
                 return {
-                    "user_name": "夸克用户",
-                    "total_space": str(cap.get("total_format") or ""),
-                    "used_space": str(cap.get("used_format") or ""),
-                    "remaining_space": str(cap.get("remaining_format") or ""),
+                    "connected": res.get("connected", True),
+                    "user_name": str(user.get("name") or "夸克用户"),
+                    "avatar": str(user.get("avatar") or ""),
+                    "is_vip": user.get("is_vip", False),
+                    "vip_expire": str(user.get("vip_expire_date") or ""),
+                    "total_space": str(storage.get("total") or ""),
+                    "used_space": str(storage.get("used") or ""),
+                    "remaining_space": str(storage.get("remaining") or ""),
                 }
-            except Exception:
-                return {}
+            except Exception as e:
+                return {"connected": False, "error": str(e)}
         return {}
