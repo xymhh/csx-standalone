@@ -18,7 +18,13 @@ def test_stream_redirect_public_access_and_cache(client: TestClient):
         ep = Episode(season_id=s.id, episode_number=1, title="正片")
         db.add(ep)
         db.flush()
-        lf = LibraryFile(episode_id=ep.id, path="电影/沙丘2 (2024)/沙丘2.mkv", size=1024, quality_bucket="hdr", provider="quark")
+        lf = LibraryFile(
+            episode_id=ep.id,
+            path="电影/沙丘2 (2024)/沙丘2.mkv",
+            size=1024,
+            quality_bucket="hdr",
+            provider="quark",
+        )
         db.add(lf)
         db.commit()
         file_id = lf.id
@@ -28,7 +34,11 @@ def test_stream_redirect_public_access_and_cache(client: TestClient):
     _remember_url(file_id, "TestUA", fake_url)
 
     # 发起公开请求（不带登录 cookie，带 User-Agent）
-    res = client.get(f"/api/v1/stream/redirect?file_id={file_id}", headers={"User-Agent": "TestUA"}, follow_redirects=False)
+    res = client.get(
+        f"/api/v1/stream/redirect?file_id={file_id}",
+        headers={"User-Agent": "TestUA"},
+        follow_redirects=False,
+    )
     assert res.status_code == 302
     assert res.headers.get("location") == fake_url
 

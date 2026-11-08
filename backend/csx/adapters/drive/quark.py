@@ -130,7 +130,11 @@ class QuarkDriveAdapter:
                 self._known[str(item.id)] = (item, parent_path)
                 result.append(
                     CloudFile(
-                        str(item.id), item.name, item_path, int(item.size or 0), str(item.sha1 or "")
+                        str(item.id),
+                        item.name,
+                        item_path,
+                        int(item.size or 0),
+                        str(item.sha1 or ""),
                     )
                 )
         return result

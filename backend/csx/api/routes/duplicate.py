@@ -32,7 +32,11 @@ def _groups(db: Session):
     for (media_id, season_number, episode_number), entries in grouped.items():
         if len(entries) < 2:
             continue
-        ordered = sorted(entries, key=lambda pair: (QUALITY_RANK.get(pair[0].quality_bucket, 0), -pair[0].id), reverse=True)
+        ordered = sorted(
+            entries,
+            key=lambda pair: (QUALITY_RANK.get(pair[0].quality_bucket, 0), -pair[0].id),
+            reverse=True,
+        )
         keep_id = ordered[0][0].id
         result.append(
             {
@@ -69,10 +73,18 @@ class DuplicateCleanRequest(BaseModel):
 @router.post("/clean")
 def clean_duplicates(body: DuplicateCleanRequest, request: Request, db: Session = Depends(get_db)):
     groups = _groups(db)
-    removable = {file["id"] for group in groups for file in group["files"] if not file["recommended"]}
+    removable = {
+        file["id"] for group in groups for file in group["files"] if not file["recommended"]
+    }
     selected = set(body.file_ids)
     if not selected.issubset(removable):
-        raise HTTPException(422, detail={"code": "DUPLICATE_SELECTION_INVALID", "message": "只能清理重复组中的非推荐版本"})
+        raise HTTPException(
+            422,
+            detail={
+                "code": "DUPLICATE_SELECTION_INVALID",
+                "message": "只能清理重复组中的非推荐版本",
+            },
+        )
     deleted = []
     failed = []
     configured = getattr(request.app.state, "drives", {})
@@ -83,7 +95,9 @@ def clean_duplicates(body: DuplicateCleanRequest, request: Request, db: Session 
                 drive = drive_for(db, row.provider, configured)
                 if drive is None or not drive.delete_path(row.path):
                     raise RuntimeError("网盘文件删除失败")
-            for record in db.scalars(select(StrmRecord).where(StrmRecord.library_file_id == row.id)).all():
+            for record in db.scalars(
+                select(StrmRecord).where(StrmRecord.library_file_id == row.id)
+            ).all():
                 db.delete(record)
             db.delete(row)
             deleted.append(file_id)

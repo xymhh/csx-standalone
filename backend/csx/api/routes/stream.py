@@ -61,16 +61,22 @@ def stream_redirect(
     del token  # Endpoint is intentionally public for media players that cannot send cookies.
     row = db.get(LibraryFile, file_id)
     if row is None:
-        raise HTTPException(404, detail={"code": "LIBRARY_FILE_NOT_FOUND", "message": "媒体文件不存在"})
+        raise HTTPException(
+            404, detail={"code": "LIBRARY_FILE_NOT_FOUND", "message": "媒体文件不存在"}
+        )
     provider = str(row.provider or "").strip().lower()
     if provider not in {"115", "quark"}:
-        raise HTTPException(409, detail={"code": "DRIVE_PROVIDER_MISSING", "message": "文件未关联受支持的网盘账号"})
+        raise HTTPException(
+            409, detail={"code": "DRIVE_PROVIDER_MISSING", "message": "文件未关联受支持的网盘账号"}
+        )
     user_agent = request.headers.get("user-agent", "")
     url = _cached_url(row.id, user_agent)
     if url is None:
         drive = drive_for(db, provider, getattr(request.app.state, "drives", {}))
         if drive is None:
-            raise HTTPException(404, detail={"code": "ACCOUNT_NOT_FOUND", "message": "网盘账号尚未绑定"})
+            raise HTTPException(
+                404, detail={"code": "ACCOUNT_NOT_FOUND", "message": "网盘账号尚未绑定"}
+            )
         try:
             resolver = getattr(drive, "resolve_download_link", None) or drive.get_download_url
             url = str(resolver(row.path))

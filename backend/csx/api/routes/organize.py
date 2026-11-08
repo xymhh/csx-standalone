@@ -37,7 +37,9 @@ def _get_drive(request: Request, db: Session, account_id: int):
     drives = getattr(request.app.state, "drives", {})
     drive = drive_for(db, account.provider, drives)
     if drive is None:
-        raise HTTPException(404, detail={"code": "ACCOUNT_NOT_CONFIGURED", "message": "网盘账号未配置"})
+        raise HTTPException(
+            404, detail={"code": "ACCOUNT_NOT_CONFIGURED", "message": "网盘账号未配置"}
+        )
     return account.provider, drive
 
 
@@ -53,7 +55,9 @@ def scan(body: OrganizeScanRequest, request: Request, db: Session = Depends(get_
     try:
         result = _plan(db, drive, body.source_path)
     except Exception as error:
-        raise HTTPException(502, detail={"code": "DRIVE_SCAN_FAILED", "message": str(error)}) from error
+        raise HTTPException(
+            502, detail={"code": "DRIVE_SCAN_FAILED", "message": str(error)}
+        ) from error
     return ok(result)
 
 
@@ -63,11 +67,19 @@ def execute(body: OrganizeExecuteRequest, request: Request, db: Session = Depend
     try:
         plan = _plan(db, drive, body.source_path)
     except Exception as error:
-        raise HTTPException(502, detail={"code": "DRIVE_SCAN_FAILED", "message": str(error)}) from error
+        raise HTTPException(
+            502, detail={"code": "DRIVE_SCAN_FAILED", "message": str(error)}
+        ) from error
     selected = set(body.file_ids)
     available = {row["file_id"]: row for row in plan["matched"] if row["file_id"] in selected}
     if selected != set(available):
-        raise HTTPException(422, detail={"code": "ORGANIZE_SELECTION_INVALID", "message": "所选文件包含无法识别或不存在的文件"})
+        raise HTTPException(
+            422,
+            detail={
+                "code": "ORGANIZE_SELECTION_INVALID",
+                "message": "所选文件包含无法识别或不存在的文件",
+            },
+        )
     moved = []
     errors = []
     source_directories: set[str] = set()
@@ -77,19 +89,39 @@ def execute(body: OrganizeExecuteRequest, request: Request, db: Session = Depend
             drive.move(file_id, str(target.parent))
             drive.rename(file_id, target.name)
             source_directories.add(str(PurePosixPath(row["source_path"]).parent))
-            season = db.scalar(select(Season).where(Season.media_id == row["media_id"], Season.season_number == row["season"]))
+            season = db.scalar(
+                select(Season).where(
+                    Season.media_id == row["media_id"], Season.season_number == row["season"]
+                )
+            )
             if season is None:
                 season = Season(media_id=row["media_id"], season_number=row["season"])
                 db.add(season)
                 db.flush()
-            episode = db.scalar(select(Episode).where(Episode.season_id == season.id, Episode.episode_number == row["episode"]))
+            episode = db.scalar(
+                select(Episode).where(
+                    Episode.season_id == season.id, Episode.episode_number == row["episode"]
+                )
+            )
             if episode is None:
                 episode = Episode(season_id=season.id, episode_number=row["episode"])
                 db.add(episode)
                 db.flush()
-            existing = db.scalar(select(LibraryFile).where(LibraryFile.episode_id == episode.id, LibraryFile.path == row["target_path"]))
+            existing = db.scalar(
+                select(LibraryFile).where(
+                    LibraryFile.episode_id == episode.id, LibraryFile.path == row["target_path"]
+                )
+            )
             if existing is None:
-                db.add(LibraryFile(episode_id=episode.id, path=row["target_path"], size=row["size"], quality_bucket=row["quality_bucket"], provider=provider))
+                db.add(
+                    LibraryFile(
+                        episode_id=episode.id,
+                        path=row["target_path"],
+                        size=row["size"],
+                        quality_bucket=row["quality_bucket"],
+                        provider=provider,
+                    )
+                )
             else:
                 existing.size = row["size"]
                 existing.quality_bucket = row["quality_bucket"]

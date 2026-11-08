@@ -127,16 +127,18 @@ class P115DriveAdapter:
             parent_path = str(raw.get("_cloud_dir") or path).rstrip("/") or "/"
             file_path = posixpath.join(parent_path, item.name)
             self._known[str(item.id)] = (item, parent_path)
-            result.append(CloudFile(str(item.id), item.name, file_path, int(item.size or 0), item.sha1))
+            result.append(
+                CloudFile(str(item.id), item.name, file_path, int(item.size or 0), item.sha1)
+            )
         return result
 
     def list_directories(self, parent_id: str = "") -> list[CloudDirectory]:
         parent_id = str(parent_id or "0")
         parent_path = self._directory_paths.get(parent_id, "/")
-        
+
         # 1. 优先尝试通过 files.manager 按 CID 列目录
         checked, items = self.files.manager.list_files_by_cid_checked(parent_id)
-        
+
         # 2. 如果 CID 失败或为空且在根目录，尝试通过 service.list_directories 路径解析
         if not checked:
             try:

@@ -221,9 +221,7 @@ def create_subscription(body: SubscriptionIn, db: Session = Depends(get_db)):
             if m_type == "tv":
                 season_num = max(1, body.season_number)
                 ep_count = max(1, body.episode_count)
-                season = Season(
-                    media_id=media.id, season_number=season_num, episode_count=ep_count
-                )
+                season = Season(media_id=media.id, season_number=season_num, episode_count=ep_count)
                 db.add(season)
                 db.flush()
                 for ep_i in range(1, ep_count + 1):
@@ -778,7 +776,9 @@ def check_account_qrcode(
             except RuntimeError as error:
                 _raise(503, "SECRET_KEY_REQUIRED", str(error))
             # 同类首个账号设为 primary
-            has_same = db.scalar(select(Account).where(Account.provider == body.provider)) is not None
+            has_same = (
+                db.scalar(select(Account).where(Account.provider == body.provider)) is not None
+            )
             account = Account(
                 provider=body.provider,
                 name=body.name.strip(),

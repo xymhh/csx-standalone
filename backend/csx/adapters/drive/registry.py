@@ -191,9 +191,13 @@ class DriveRegistry:
                     "is_vip": is_vip,
                     "is_forever_vip": is_forever,
                     "vip_expire": "永久" if is_forever else str(vip_data.get("expire_str") or ""),
-                    "total_space": str((space_data.get("all_total") or {}).get("size_format") or ""),
+                    "total_space": str(
+                        (space_data.get("all_total") or {}).get("size_format") or ""
+                    ),
                     "used_space": str((space_data.get("all_use") or {}).get("size_format") or ""),
-                    "remaining_space": str((space_data.get("all_remain") or {}).get("size_format") or ""),
+                    "remaining_space": str(
+                        (space_data.get("all_remain") or {}).get("size_format") or ""
+                    ),
                 }
             except Exception as e:
                 return {"connected": False, "error": str(e)}

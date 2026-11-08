@@ -59,7 +59,9 @@ def plan_organize(
         stem = PurePosixPath(name).stem
         season, episode = parse_episode_from_name(stem)
         folded = _fold(stem)
-        candidates = [item for item in media if _fold(str(item.title)) and _fold(str(item.title)) in folded]
+        candidates = [
+            item for item in media if _fold(str(item.title)) and _fold(str(item.title)) in folded
+        ]
         item = max(candidates, key=lambda value: len(_fold(str(value.title))), default=None)
         if item is None or (item.type not in {"movie", "film", "电影"} and episode is None):
             row.update({"recognized": False, "reason": "无法匹配片名或季集"})

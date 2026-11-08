@@ -90,7 +90,11 @@ def format_tmdb_item(item: dict[str, Any]) -> dict[str, Any]:
         media_type = "tv" if "first_air_date" in item or "name" in item else "movie"
 
     release_date = item.get("release_date") or item.get("first_air_date") or ""
-    year = int(release_date[:4]) if release_date and len(release_date) >= 4 and release_date[:4].isdigit() else None
+    year = (
+        int(release_date[:4])
+        if release_date and len(release_date) >= 4 and release_date[:4].isdigit()
+        else None
+    )
 
     return {
         "id": item.get("id"),
@@ -122,7 +126,12 @@ class TmdbClient:
         try:
             resp = requests.get(url, headers=headers, timeout=8)
             if resp.status_code == 200:
-                return {"configured": True, "valid": True, "message": "连通正常", "key_prefix": f"{key[:6]}..."}
+                return {
+                    "configured": True,
+                    "valid": True,
+                    "message": "连通正常",
+                    "key_prefix": f"{key[:6]}...",
+                }
             return {
                 "configured": True,
                 "valid": False,
@@ -177,7 +186,9 @@ class TmdbClient:
         query = str(query or "").strip()
         if not key or not query:
             return []
-        url = f"{TMDB_API_BASE}/search/multi?api_key={key}&language=zh-CN&query={quote(query)}&page=1"
+        url = (
+            f"{TMDB_API_BASE}/search/multi?api_key={key}&language=zh-CN&query={quote(query)}&page=1"
+        )
         data = _cached_fetch(url)
         results = data.get("results") or []
         return [
@@ -203,12 +214,16 @@ class TmdbClient:
                 for s in data.get("seasons") or []:
                     s_num = s.get("season_number", 0)
                     if s_num > 0:
-                        seasons.append({
-                            "season_number": s_num,
-                            "name": s.get("name") or f"第 {s_num} 季",
-                            "episode_count": s.get("episode_count", 12),
-                            "poster_url": f"{TMDB_IMAGE_BASE}{s.get('poster_path')}" if s.get("poster_path") else None,
-                        })
+                        seasons.append(
+                            {
+                                "season_number": s_num,
+                                "name": s.get("name") or f"第 {s_num} 季",
+                                "episode_count": s.get("episode_count", 12),
+                                "poster_url": f"{TMDB_IMAGE_BASE}{s.get('poster_path')}"
+                                if s.get("poster_path")
+                                else None,
+                            }
+                        )
                 res["seasons"] = seasons
             return res
         except Exception as error:

@@ -19,11 +19,19 @@ def _get_115_drive(request: Request, db: Session, account_id: int):
     if account is None:
         raise HTTPException(404, detail={"code": "ACCOUNT_NOT_FOUND", "message": "网盘账号不存在"})
     if account.provider.lower() != "115":
-        raise HTTPException(400, detail={"code": "OFFLINE_NOT_SUPPORTED", "message": f"{account.provider} 网盘暂不支持云端离线下载，目前仅支持 115 网盘"})
+        raise HTTPException(
+            400,
+            detail={
+                "code": "OFFLINE_NOT_SUPPORTED",
+                "message": f"{account.provider} 网盘暂不支持云端离线下载，目前仅支持 115 网盘",
+            },
+        )
     drives = getattr(request.app.state, "drives", {})
     drive = drive_for(db, "115", drives)
     if drive is None:
-        raise HTTPException(404, detail={"code": "ACCOUNT_NOT_CONFIGURED", "message": "115 网盘账号尚未配置"})
+        raise HTTPException(
+            404, detail={"code": "ACCOUNT_NOT_CONFIGURED", "message": "115 网盘账号尚未配置"}
+        )
     return drive
 
 
