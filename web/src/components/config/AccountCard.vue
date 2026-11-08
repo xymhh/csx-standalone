@@ -184,10 +184,12 @@ const usedPct = computed(() => {
         <span>凭据已通过 Fernet 工业级加密存储</span>
         <button
           type="button"
-          class="text-blue-400 hover:text-blue-300 transition-colors cursor-pointer font-medium"
+          class="text-blue-400 hover:text-blue-300 transition-colors cursor-pointer font-medium flex items-center gap-1"
+          :disabled="loading"
           @click="emit('refresh', account.id)"
         >
-          点击刷新容量信息 →
+          <RefreshCw v-if="loading" class="h-3 w-3 animate-spin text-blue-400" />
+          <span>{{ loading ? '正在同步中…' : '点击刷新容量信息 →' }}</span>
         </button>
       </div>
 

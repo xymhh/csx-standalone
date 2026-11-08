@@ -458,7 +458,9 @@ async function testAccount(id: number) {
     toast(`${res.provider}网盘：${res.message}`, res.valid ? 'success' : 'error')
     if (res.info) {
       const target = accounts.value.find((a) => a.id === id)
-      if (target) target.info = res.info
+      if (target) {
+        target.info = { ...(target.info || {}), ...res.info }
+      }
     }
   } catch (cause) {
     toast(cause instanceof Error ? cause.message : '检测失败', 'error')
