@@ -96,14 +96,44 @@ class QuarkDriveAdapter:
             raise RuntimeError(f"未获得文件直链：{path}")
         return str(url)
 
+    def resolve_download_link(self, path: str) -> str:
+        return self.get_download_url(path)
+
+    def delete_path(self, path: str) -> bool:
+        directory, filename = posixpath.split(str(path))
+        item = self.files.find_file(directory or "/", filename)
+        if item is None or item.is_directory:
+            return False
+        return bool(self.files.delete_file(item.id))
+
+    def delete_empty_directory(self, path: str) -> bool:
+        directory, name = posixpath.split(str(path).rstrip("/"))
+        item = self.files.find_file(directory or "/", name)
+        if item is None or not item.is_directory or self.files._list(item.id):
+            return False
+        return bool(self.files.delete_file(item.id))
+
     def list_dir(self, path: str) -> list[CloudFile]:
-        items = self.files.list_files_recursive(path)
-        self._known.update({str(item.id): (item, path) for item in items})
-        return [
-            CloudFile(str(item.id), item.name, path, int(item.size or 0), str(item.sha1 or ""))
-            for item in items
-            if not item.is_directory
-        ]
+        lookup = self.files.resolve_directory(path)
+        if not lookup.checked or lookup.directory_id is None:
+            raise RuntimeError(f"无法读取夸克目录：{path}")
+        root = str(path).rstrip("/") or "/"
+        result = []
+        queue = [(str(lookup.directory_id), root)]
+        while queue:
+            parent_id, parent_path = queue.pop()
+            for item in self.files._list(parent_id):
+                item_path = posixpath.join(parent_path, item.name)
+                if item.is_directory:
+                    queue.append((item.id, item_path))
+                    continue
+                self._known[str(item.id)] = (item, parent_path)
+                result.append(
+                    CloudFile(
+                        str(item.id), item.name, item_path, int(item.size or 0), str(item.sha1 or "")
+                    )
+                )
+        return result
 
     def list_directories(self, parent_id: str = "") -> list[CloudDirectory]:
         parent_id = str(parent_id or "0")

@@ -17,7 +17,19 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from csx import __version__
 from csx.api.deps import COOKIE_NAME
 from csx.api.envelope import fail, ok
-from csx.api.routes import auth, drives, health, p6, resources, sources, system, tg
+from csx.api.routes import (
+    auth,
+    drives,
+    duplicate,
+    health,
+    organize,
+    p6,
+    resources,
+    sources,
+    stream,
+    system,
+    tg,
+)
 from csx.application.auth import session_user
 from csx.infra.bootstrap import ensure_admin, init_db
 from csx.infra.checkin_runtime import scheduled_checkin
@@ -27,7 +39,7 @@ from csx.infra.logging import setup_logging
 from csx.infra.scheduler import TaskScheduler
 from csx.infra.settings import settings
 
-PUBLIC_API_PATHS = {"/api/v1/auth/login"}
+PUBLIC_API_PATHS = {"/api/v1/auth/login", "/api/v1/stream/redirect"}
 
 
 @asynccontextmanager
@@ -131,6 +143,9 @@ app.include_router(system.router, prefix="/api/v1")
 app.include_router(sources.router, prefix="/api/v1")
 app.include_router(tg.router, prefix="/api/v1")
 app.include_router(drives.router, prefix="/api/v1")
+app.include_router(stream.router, prefix="/api/v1")
+app.include_router(duplicate.router, prefix="/api/v1")
+app.include_router(organize.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["meta"])

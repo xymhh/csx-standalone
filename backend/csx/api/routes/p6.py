@@ -102,6 +102,7 @@ def sync_strm(
     db: Session = Depends(get_db),
 ):
     config = _settings_section(db, "strm")
+    config["public_base_url"] = str(config.get("public_base_url") or request.base_url).rstrip("/")
     is_direct = str(config.get("mode") or "local_mount").lower() == "direct"
     drives = {}
     if is_direct:

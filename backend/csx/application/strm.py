@@ -7,7 +7,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 
 @dataclass(frozen=True)
@@ -33,6 +33,7 @@ def build_strm_content(
     url_template: str = "",
     direct_url: str = "",
     library_file_id: int | None = None,
+    public_base_url: str = "",
 ) -> str:
     """Build one STRM target from a local mount, URL template, or resolved URL."""
     relative = _relative_media_path(library_path)
@@ -45,6 +46,10 @@ def build_strm_content(
         if not direct_url:
             raise ValueError("无法解析网盘直链")
         return direct_url
+    if normalized_mode in {"direct_302", "redirect_302"}:
+        if not public_base_url or not library_file_id:
+            raise ValueError("direct_302 需要 public_base_url 和 library_file_id")
+        return f"{public_base_url.rstrip('/')}/api/v1/stream/redirect?{urlencode({'file_id': library_file_id})}"
     if normalized_mode in {"template", "proxy", "proxy_url"}:
         if not url_template:
             raise ValueError("url_template 未配置")
@@ -111,6 +116,7 @@ class StrmService:
                     url_template=str(self.config.get("url_template") or ""),
                     direct_url=direct_url,
                     library_file_id=int(row["id"]),
+                    public_base_url=str(self.config.get("public_base_url") or ""),
                 )
                 rendered = content.rstrip("\r\n") + "\n"
                 old = output.read_text(encoding="utf-8") if output.exists() else None
