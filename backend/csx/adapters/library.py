@@ -158,4 +158,22 @@ class SqlAlchemyTransferRepositories:
 
     def get_media(self, media_id: int) -> dict | None:
         row = self.session.get(MediaItem, media_id)
-        return {"title": row.title, "type": row.type, "year": row.year} if row is not None else None
+        return (
+            {"title": row.title, "type": row.type, "year": row.year, "tmdb_id": row.tmdb_id}
+            if row is not None
+            else None
+        )
+
+    def get_episode_title(self, media_id: int, season: int, episode: int) -> str:
+        """单集标题，供重命名模板的 {{episode_title}} 使用；查不到返回空串。"""
+        season_row = self.session.scalar(
+            select(Season).where(Season.media_id == media_id, Season.season_number == season)
+        )
+        if season_row is None:
+            return ""
+        row = self.session.scalar(
+            select(Episode).where(
+                Episode.season_id == season_row.id, Episode.episode_number == episode
+            )
+        )
+        return str(row.title or "") if row is not None else ""

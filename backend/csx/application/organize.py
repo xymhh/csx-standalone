@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+import logging
 import posixpath
 
+from csx.application.naming import (
+    NamingError,
+    build_context,
+    render_relative_path,
+    split_relative_path,
+)
 from csx.domain.naming import build_media_paths
 
 _MOVIE_TYPES = {"movie", "film", "电影"}
+
+logger = logging.getLogger(__name__)
 
 
 def is_movie(media_type: str | None) -> bool:
@@ -26,8 +35,15 @@ def organize_file(
     type_folder: bool = False,
     type_movie: str = "电影",
     type_tv: str = "电视剧",
+    template: str | None = None,
+    episode_title: str = "",
+    total_episodes: int | None = None,
 ) -> str:
-    """Move and rename one transferred cloud file; return its resulting path."""
+    """Move and rename one transferred cloud file; return its resulting path.
+
+    ``template`` 为 MoviePilot 风格 Jinja2 模板；为空或渲染失败时回退旧格式，
+    保证整理任务不会因模板问题直接失败。
+    """
     folder, filename = build_media_paths(
         media_title=media["title"],
         media_type=media.get("type", "tv"),
@@ -39,6 +55,25 @@ def organize_file(
         resource_kind=file_row.get("resource_kind", "episode"),
         release_date=file_row.get("release_date"),
     )
+    if template:
+        try:
+            context = build_context(
+                title=media["title"],
+                year=media.get("year"),
+                media_type=media.get("type", "tv"),
+                tmdb_id=media.get("tmdb_id"),
+                season=file_row.get("season"),
+                episode=file_row.get("episode"),
+                episode_title=episode_title,
+                episode_date=file_row.get("release_date"),
+                total_episodes=total_episodes,
+                extension=file_row.get("extension", "mkv"),
+                quality_bucket=file_row.get("quality_bucket", "sd"),
+                part=file_row.get("part"),
+            )
+            folder, filename = split_relative_path(render_relative_path(template, context))
+        except NamingError as error:
+            logger.warning("重命名模板不可用，回退旧格式：%s", error)
     segments = [str(library_root or "").strip().rstrip("/")]
     if type_folder:
         segments.append(

@@ -22,6 +22,7 @@ from csx.api.routes import (
     drives,
     duplicate,
     health,
+    naming,
     offline,
     organize,
     p6,
@@ -150,6 +151,7 @@ app.include_router(stream.router, prefix="/api/v1")
 app.include_router(duplicate.router, prefix="/api/v1")
 app.include_router(organize.router, prefix="/api/v1")
 app.include_router(tmdb.router, prefix="/api/v1")
+app.include_router(naming.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["meta"])

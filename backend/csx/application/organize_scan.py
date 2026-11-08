@@ -8,6 +8,13 @@ from collections.abc import Iterable
 from pathlib import PurePosixPath
 from typing import Any
 
+from csx.application.naming import (
+    NamingError,
+    build_context,
+    render_relative_path,
+    select_template,
+    split_relative_path,
+)
 from csx.application.organize import media_type_dir
 from csx.domain.naming import build_media_paths, parse_episode_from_name
 
@@ -41,11 +48,14 @@ def plan_organize(
     type_folder: bool = False,
     type_movie: str = "电影",
     type_tv: str = "电视剧",
+    naming: dict | None = None,
+    episode_meta_for: Any = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """Return matched and unrecognized drive files without performing I/O."""
     media = list(media_items)
     matched: list[dict[str, Any]] = []
     unrecognized: list[dict[str, Any]] = []
+    warnings: list[str] = []
     for file in files:
         name = str(getattr(file, "name", ""))
         source_path = str(getattr(file, "path", "") or name)
@@ -87,6 +97,31 @@ def plan_organize(
             ext,
             "video",
         )
+        template = select_template(naming, item.type)
+        episode_title = ""
+        total_episodes = None
+        if episode_meta_for is not None:
+            try:
+                episode_title, total_episodes = episode_meta_for(int(item.id), season, episode)
+            except Exception:  # 预览阶段查不到单集信息不影响整理
+                episode_title, total_episodes = "", None
+        if template:
+            try:
+                context = build_context(
+                    title=item.title,
+                    year=item.year,
+                    media_type=item.type,
+                    tmdb_id=getattr(item, "tmdb_id", None),
+                    season=season,
+                    episode=episode,
+                    episode_title=episode_title,
+                    total_episodes=total_episodes,
+                    extension=ext,
+                    quality_bucket=bucket,
+                )
+                folder, target_name = split_relative_path(render_relative_path(template, context))
+            except NamingError as error:
+                warnings.append(f"{name}：{error}，已回退旧格式")
         target_path = posixpath.join(
             str(library_root).rstrip("/"),
             media_type_dir(item.type, type_movie=type_movie, type_tv=type_tv)
@@ -104,7 +139,8 @@ def plan_organize(
                 "episode": episode,
                 "quality_bucket": bucket,
                 "target_path": target_path,
+                "episode_title": episode_title,
             }
         )
         matched.append(row)
-    return {"matched": matched, "unrecognized": unrecognized}
+    return {"matched": matched, "unrecognized": unrecognized, "warnings": warnings}

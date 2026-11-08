@@ -36,8 +36,9 @@ def test_plan_organize_matches_episodes_and_quality():
     assert matched[0]["season"] == 2
     assert matched[0]["episode"] == 1
     assert matched[0]["quality_bucket"] == "dv"
-    assert "Season 02" in matched[0]["target_path"]
-    assert "[DV]" in matched[0]["target_path"]
+    assert matched[0]["target_path"] == (
+        "/媒体库/庆余年 (2019)/Season 2/庆余年 - S02E01 - 第 1 集.mkv"
+    )
 
     assert matched[1]["file_id"] == "f2"
     assert matched[1]["episode"] == 2

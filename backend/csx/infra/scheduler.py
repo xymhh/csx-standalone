@@ -18,6 +18,7 @@ from csx.domain.task import TaskState
 from csx.infra.cloud_paths import resolve_cloud_paths
 from csx.infra.db import SessionLocal
 from csx.infra.events import EventBus, event_bus
+from csx.infra.naming_config import resolve_naming
 from csx.infra.settings import settings
 
 
@@ -263,6 +264,7 @@ class TaskScheduler:
                 repos=repos,
                 settings=settings,
                 cloud_paths=resolve_cloud_paths(db, provider) if provider else None,
+                naming=resolve_naming(db),
             )
             db.commit()
             task = repos.tasks.get(int(row["id"]))

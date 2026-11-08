@@ -61,3 +61,35 @@ def test_type_folder_enabled_adds_tv_and_movie_directories():
 
     assert tv_path.startswith("/CSX/媒体库/电视剧/Example (2024)/Season 01/")
     assert movie_path == "/CSX/媒体库/电影/Example (2024)/Example (2024) [REMUX].mkv"
+
+
+def test_template_overrides_legacy_path():
+    from csx.domain.naming import DEFAULT_TV_TEMPLATE
+
+    drive = RecordingDrive()
+
+    path = organize_file(
+        drive,
+        _file_row(),
+        MEDIA_TV,
+        library_root="/CSX/媒体库",
+        template=DEFAULT_TV_TEMPLATE,
+        episode_title="第一集",
+    )
+
+    assert path == "/CSX/媒体库/Example (2024)/Season 1/Example - S01E01 - 第 1 集.mkv"
+    assert drive.moves[0] == ("f1", "/CSX/媒体库/Example (2024)/Season 1")
+
+
+def test_invalid_template_falls_back_to_legacy_format():
+    drive = RecordingDrive()
+
+    path = organize_file(
+        drive,
+        _file_row(),
+        MEDIA_TV,
+        library_root="/CSX/媒体库",
+        template="{{title}}",
+    )
+
+    assert path == "/CSX/媒体库/Example (2024)/Season 01/Example (2024) S01E01 [REMUX].mkv"

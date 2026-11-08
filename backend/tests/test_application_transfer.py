@@ -208,7 +208,7 @@ def test_transfer_uses_account_paths_and_type_folder():
     )
 
     path = next(iter(repos.library.items.values()))["path"]
-    assert path.startswith("/夸克/媒体库/剧集/Example (2024)/Season 01/")
+    assert path.startswith("/夸克/媒体库/剧集/Example (2024)/Season 1/")
     assert drive.last_target_dir == "/夸克/暂存/account-paths"
 
 
@@ -225,5 +225,5 @@ def test_transfer_defaults_to_settings_paths_without_cloud_paths():
     execute_transfer(None, row, drives={"quark": drive}, repos=repos, settings=Settings())
 
     path = next(iter(repos.library.items.values()))["path"]
-    assert path.startswith("/Media/Example (2024)/Season 01/")
+    assert path.startswith("/Media/Example (2024)/Season 1/")
     assert drive.last_target_dir == "/CSX/_inbox/settings-paths"

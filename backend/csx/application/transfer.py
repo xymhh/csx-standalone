@@ -8,6 +8,7 @@ import time
 from contextlib import contextmanager
 from datetime import date
 
+from csx.application.naming import select_template
 from csx.application.organize import organize_file
 from csx.domain.naming import parse_episode_from_name
 from csx.domain.resource import idempotency_key
@@ -89,7 +90,16 @@ def _transfer_layout(settings, cloud_paths: dict | None) -> dict:
     }
 
 
-def execute_transfer(session, task_row, *, drives, repos, settings, cloud_paths=None) -> dict:
+def execute_transfer(
+    session,
+    task_row,
+    *,
+    drives,
+    repos,
+    settings,
+    cloud_paths=None,
+    naming=None,
+) -> dict:
     """Run one share transfer and persist each recognized media episode.
 
     ``task_row`` carries resource_id and media_id; repositories provide
@@ -276,6 +286,13 @@ def execute_transfer(session, task_row, *, drives, repos, settings, cloud_paths=
                 "resource_kind": resource.get("resource_kind", "episode"),
                 "release_date": _release_date(resource.get("release_date")),
             }
+            episode_title = ""
+            title_lookup = getattr(repos, "get_episode_title", None)
+            if title_lookup is not None:
+                try:
+                    episode_title = str(title_lookup(media_id, file_season, file_episode) or "")
+                except Exception:  # 单集标题只是模板变量，查不到不影响整理
+                    episode_title = ""
             try:
                 target_path = organize_file(
                     drive,
@@ -285,6 +302,10 @@ def execute_transfer(session, task_row, *, drives, repos, settings, cloud_paths=
                     type_folder=layout["type_folder"],
                     type_movie=layout["type_movie"],
                     type_tv=layout["type_tv"],
+                    template=select_template(
+                        naming, media.get("type"), file_row.get("resource_kind")
+                    ),
+                    episode_title=episode_title,
                 )
                 repos.library.update_path(file_id=file_id, old_path=path, new_path=target_path)
                 organized_dir = posixpath.dirname(target_path)

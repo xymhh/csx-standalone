@@ -15,6 +15,7 @@ from csx.infra.cloud_paths import resolve_cloud_paths
 from csx.infra.db import get_db
 from csx.infra.drive_runtime import drive_for
 from csx.infra.models import Episode, LibraryFile, MediaItem, Season
+from csx.infra.naming_config import episode_meta, resolve_naming
 
 router = APIRouter(prefix="/organize", tags=["organize"])
 
@@ -54,6 +55,10 @@ def _plan(db: Session, account, drive, source_path: str):
         type_folder=paths["type_folder"],
         type_movie=paths["type_movie"],
         type_tv=paths["type_tv"],
+        naming=resolve_naming(db),
+        episode_meta_for=lambda media_id, season, episode: episode_meta(
+            db, media_id, season, episode
+        ),
     )
 
 

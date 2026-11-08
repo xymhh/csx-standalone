@@ -6,7 +6,24 @@ import re
 from datetime import date
 
 _INVALID = re.compile(r"[/\\:*?\"<>|]+")
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]+")
 _SPACE = re.compile(r"\s+")
+
+# MoviePilot 默认模板（app/core/config.py MOVIE_RENAME_FORMAT / TV_RENAME_FORMAT）
+DEFAULT_MOVIE_TEMPLATE = (
+    "{{title}}{% if year %} ({{year}}){% endif %}"
+    "/{{title}}{% if year %} ({{year}}){% endif %}"
+    "{% if part %}-{{part}}{% endif %}"
+    "{% if videoFormat %} - {{videoFormat}}{% endif %}{{fileExt}}"
+)
+DEFAULT_TV_TEMPLATE = (
+    "{{title}}{% if year %} ({{year}}){% endif %}"
+    "/Season {{season}}"
+    "/{{title}} - {{season_episode}}"
+    "{% if part %}-{{part}}{% endif %}"
+    "{% if episode %} - 第 {{episode}} 集{% endif %}{{fileExt}}"
+)
+MAX_TEMPLATE_LENGTH = 512
 _EPISODE_PATTERNS = (
     re.compile(r"(?i)S(?P<season>\d{1,3})[ ._-]*E(?:P)?[ ._-]*(?P<episode>\d{1,4})\b"),
     re.compile(r"(?i)\bE(?:P)?[ ._-]*(?P<episode>\d{1,4})\b"),
@@ -33,6 +50,35 @@ def parse_episode_from_name(text: str) -> tuple[int | None, int | None]:
     except (TypeError, ValueError):
         return None, None
     return None, None
+
+
+def clean_segment(value: str) -> str:
+    """清洗单个路径段：替换非法字符、压缩空白、去掉首尾空格与点。"""
+    text = _CONTROL.sub(" ", str(value or ""))
+    text = _SPACE.sub(" ", _INVALID.sub(" ", text))
+    return text.strip(" .")[:200].rstrip(" .")
+
+
+def normalize_relative_path(rendered: str) -> str:
+    """校验模板渲染结果并规范成相对 POSIX 路径。
+
+    规则：至少一级目录、不允许空段/``.``/``..``、每段清洗非法字符、总长上限。
+    不合法时抛 ``ValueError``（消息面向用户，可直接展示）。
+    """
+    text = str(rendered or "").replace("\\", "/").strip()
+    if not text:
+        raise ValueError("模板渲染结果为空，请检查模板是否包含 {{title}}")
+    if len(text) > MAX_TEMPLATE_LENGTH:
+        raise ValueError(f"模板渲染结果超过 {MAX_TEMPLATE_LENGTH} 字符，请精简模板")
+    segments = [part.strip() for part in text.strip("/").split("/")]
+    if any(part in {"", ".", ".."} for part in segments):
+        raise ValueError("模板路径包含空目录、`.` 或 `..`，请检查斜杠用法")
+    cleaned = [clean_segment(part) for part in segments]
+    if any(not part for part in cleaned):
+        raise ValueError("模板渲染后存在空目录名，请检查变量是否为空")
+    if len(cleaned) < 2:
+        raise ValueError("模板至少要有一级目录，例如 `{{title}}/{{title}}{{fileExt}}`")
+    return "/".join(cleaned)
 
 
 def build_media_paths(
