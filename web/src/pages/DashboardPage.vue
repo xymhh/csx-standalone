@@ -95,7 +95,7 @@ async function createSubscription() {
     addOpen.value = false
     title.value = ''
     tmdbId.value = undefined
-    toast('追更添加成功！系统已开始全网搜源转存', 'success')
+    toast('追更添加成功！系统已开始全网找源转存', 'success')
     await load()
   } catch (cause) {
     toast(cause instanceof Error ? cause.message : '添加失败', 'error')
@@ -110,53 +110,53 @@ const runningTasks = () => tasks.value.filter((t) => t.state === 'running')
 
 <template>
   <div class="space-y-8">
-    <!-- 顶栏精美控制区域 -->
-    <div class="flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-6">
+    <!-- 顶栏精美控制区域：大字排版 + 呼吸感微数据 + 醒目操作按钮 -->
+    <div class="flex flex-wrap items-end justify-between gap-4 border-b border-white/[0.06] pb-6">
       <div>
-        <div class="flex items-center gap-2.5">
-          <h2 class="text-2xl font-bold tracking-tight text-fg">我的追剧</h2>
+        <div class="flex items-center gap-3">
+          <h2 class="text-2xl font-bold tracking-tight text-white">我的追剧</h2>
           <Badge tone="good" pulse>自动监控中</Badge>
         </div>
-        <p class="mt-1 text-xs text-muted">
-          已关注 <span class="text-fg font-medium">{{ items.length }}</span> 部影视 ·
-          待补集数 <span class="font-mono text-amber-400 font-medium">{{ totalMissing() }}</span> 集 ·
-          正在转存 <span class="font-mono text-sky-400 font-medium">{{ runningTasks().length }}</span> 个文件
+        <p class="mt-1.5 text-xs text-zinc-400">
+          已关注 <span class="font-mono font-semibold text-zinc-200">{{ items.length }}</span> 部影视 ·
+          待补集数 <span class="font-mono font-semibold text-amber-400">{{ totalMissing() }}</span> 集 ·
+          正在转存 <span class="font-mono font-semibold text-sky-400">{{ runningTasks().length }}</span> 个文件
         </p>
       </div>
 
       <div class="flex items-center gap-2.5">
         <RouterLink to="/search">
-          <Button variant="outline" size="sm" class="flex items-center gap-1.5">
+          <Button variant="outline" size="sm" class="flex items-center gap-1.5 border-zinc-800 text-zinc-300 hover:text-white">
             <Search class="h-3.5 w-3.5" />
-            <span>搜影视</span>
+            <span>全网搜源</span>
           </Button>
         </RouterLink>
-        <Button size="sm" class="flex items-center gap-1.5 shadow-sm shadow-white/10" @click="addOpen = true">
+        <Button size="sm" class="flex items-center gap-1.5 shadow-md shadow-white/5" @click="addOpen = true">
           <Plus class="h-4 w-4" />
           <span>添加追剧</span>
         </Button>
       </div>
     </div>
 
-    <!-- 核心视觉重心：精美影视海报墙（Poster Grid） -->
+    <!-- 核心视觉重心：2:3 电影海报墙（Poster Grid） -->
     <section class="space-y-4">
       <div class="flex items-center justify-between">
-        <h3 class="text-sm font-semibold tracking-tight text-fg flex items-center gap-2">
+        <h3 class="text-sm font-semibold tracking-tight text-white flex items-center gap-2">
           <span>追剧清单</span>
-          <span class="rounded-full bg-surface-2 px-2 py-0.5 font-mono text-[11px] text-muted">{{ items.length }}</span>
+          <span class="rounded-full bg-zinc-800 px-2 py-0.5 font-mono text-[11px] text-zinc-400">{{ items.length }}</span>
         </h3>
-        <span class="text-[11px] text-subtle">点击任意剧集卡片展开季集与网盘文件详情</span>
+        <span class="text-xs text-zinc-500">点击卡片滑出季集与真实文件明细</span>
       </div>
 
       <!-- 空白占位引导 -->
       <div
         v-if="!items.length && !loading"
-        class="rounded-3xl border border-dashed border-border/80 bg-surface/30 p-16 text-center"
+        class="rounded-3xl border border-dashed border-zinc-800 bg-zinc-900/30 p-16 text-center"
       >
-        <Film class="mx-auto mb-3 h-10 w-10 text-subtle/50" />
-        <h4 class="text-base font-semibold text-fg">追剧清单还是空的</h4>
-        <p class="mt-1 text-xs text-muted max-w-sm mx-auto">
-          点击右上角「+ 添加追剧」，输入剧名（如：庆余年），系统将全天候自动在全网搜寻资源并存入你的网盘。
+        <Film class="mx-auto mb-3 h-10 w-10 text-zinc-600" />
+        <h4 class="text-base font-semibold text-white">追剧清单还是空的</h4>
+        <p class="mt-1 text-xs text-zinc-400 max-w-sm mx-auto">
+          点击右上角「+ 添加追剧」，直接输入片名即可全自动搜源转存。
         </p>
         <Button size="sm" class="mt-5" @click="addOpen = true">立即添加一部剧</Button>
       </div>
@@ -172,19 +172,19 @@ const runningTasks = () => tasks.value.filter((t) => t.state === 'running')
       </div>
     </section>
 
-    <!-- 底部状态与转存队列横幅（紧凑舒适，不喧宾夺主） -->
-    <section class="grid gap-4 lg:grid-cols-12 pt-2">
+    <!-- 底部状态与转存队列横幅（无冗余套娃边框，轻盈现代） -->
+    <section class="grid gap-5 lg:grid-cols-12 pt-2">
       <!-- 正在进行的转存任务 -->
-      <div class="lg:col-span-8 rounded-2xl border border-border/60 bg-surface/40 p-5 space-y-3">
+      <div class="lg:col-span-8 rounded-2xl border border-white/[0.06] bg-zinc-900/40 p-5 space-y-3">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <DownloadCloud class="h-4 w-4 text-sky-400" />
-            <h4 class="text-sm font-semibold text-fg">转存队列</h4>
+            <h4 class="text-sm font-semibold text-white">转存队列</h4>
           </div>
-          <RouterLink to="/tasks" class="text-xs text-muted hover:text-fg">查看全部任务 →</RouterLink>
+          <RouterLink to="/tasks" class="text-xs text-zinc-400 hover:text-white transition-colors">查看全部任务 →</RouterLink>
         </div>
 
-        <div v-if="!tasks.length" class="py-5 text-center text-xs text-muted">
+        <div v-if="!tasks.length" class="py-6 text-center text-xs text-zinc-500">
           暂无正在处理的任务，所有入库文件均已就绪
         </div>
         <div v-else class="space-y-2">
@@ -198,42 +198,42 @@ const runningTasks = () => tasks.value.filter((t) => t.state === 'running')
       </div>
 
       <!-- 系统健康状态指标 -->
-      <div class="lg:col-span-4 rounded-2xl border border-border/60 bg-surface/40 p-5 space-y-3">
+      <div class="lg:col-span-4 rounded-2xl border border-white/[0.06] bg-zinc-900/40 p-5 space-y-3">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <Activity class="h-4 w-4 text-emerald-400" />
-            <h4 class="text-sm font-semibold text-fg">系统运行状态</h4>
+            <h4 class="text-sm font-semibold text-white">系统运行状态</h4>
           </div>
           <Badge tone="good">正常</Badge>
         </div>
 
-        <div class="space-y-2 pt-1 text-xs">
-          <div class="flex items-center justify-between text-muted">
+        <div class="space-y-2.5 pt-1 text-xs">
+          <div class="flex items-center justify-between text-zinc-400">
             <span class="flex items-center gap-2">
-              <HardDrive class="h-3.5 w-3.5 text-zinc-400" />
+              <HardDrive class="h-3.5 w-3.5 text-zinc-500" />
               <span>本地 SQLite 存储</span>
             </span>
             <span class="font-mono text-zinc-300">正常</span>
           </div>
-          <div class="flex items-center justify-between text-muted border-t border-border/30 pt-2">
+          <div class="flex items-center justify-between text-zinc-400 border-t border-white/[0.04] pt-2.5">
             <span class="flex items-center gap-2">
-              <RefreshCw class="h-3.5 w-3.5 text-zinc-400" />
+              <RefreshCw class="h-3.5 w-3.5 text-zinc-500" />
               <span>全天候自动轮询</span>
             </span>
-            <span class="text-status-ready">30s 巡检</span>
+            <span class="text-emerald-400 font-medium">30s 巡检</span>
           </div>
-          <div class="flex items-center justify-between text-muted border-t border-border/30 pt-2">
+          <div class="flex items-center justify-between text-zinc-400 border-t border-white/[0.04] pt-2.5">
             <span class="flex items-center gap-2">
-              <Sparkles class="h-3.5 w-3.5 text-zinc-400" />
+              <Sparkles class="h-3.5 w-3.5 text-zinc-500" />
               <span>网盘账号安全保护</span>
             </span>
-            <span class="text-status-ready">Fernet 密保</span>
+            <span class="text-emerald-400 font-medium">Fernet 密保</span>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 侧滑大抽屉（查看选中的剧集详细文件） -->
+    <!-- 侧滑大抽屉 -->
     <MediaDrawer
       :open="drawerOpen"
       :media-id="selectedMediaId"
@@ -244,14 +244,14 @@ const runningTasks = () => tasks.value.filter((t) => t.state === 'running')
     <Dialog :open="addOpen" title="添加追更订阅" @close="addOpen = false">
       <form class="space-y-4" @submit.prevent="createSubscription">
         <label class="block space-y-1.5 text-sm">
-          <span class="font-medium text-fg">影视名称</span>
+          <span class="font-medium text-white">影视名称</span>
           <Input v-model="title" required placeholder="例如：庆余年、死侍、边水往事" />
-          <span class="text-xs text-muted">直接输入中文或英文片名即可，系统自动匹配</span>
+          <span class="text-xs text-zinc-500">直接输入中文或英文片名即可，系统自动匹配</span>
         </label>
 
         <div class="grid grid-cols-2 gap-3">
           <label class="block space-y-1.5 text-sm">
-            <span class="font-medium text-fg">类型</span>
+            <span class="font-medium text-white">类型</span>
             <Select
               v-model="mediaType"
               :options="[
@@ -261,18 +261,18 @@ const runningTasks = () => tasks.value.filter((t) => t.state === 'running')
             />
           </label>
           <label class="block space-y-1.5 text-sm">
-            <span class="font-medium text-fg">上映年份 (可选)</span>
+            <span class="font-medium text-white">上映年份 (可选)</span>
             <Input v-model.number="year" type="number" min="1900" max="2100" placeholder="例如 2024" />
           </label>
         </div>
 
-        <div v-if="mediaType === 'tv'" class="grid grid-cols-2 gap-3 p-3 rounded-xl border border-border/60 bg-surface-2/30">
+        <div v-if="mediaType === 'tv'" class="grid grid-cols-2 gap-3 p-3 rounded-xl border border-white/[0.06] bg-zinc-900/40">
           <label class="block space-y-1 text-xs">
-            <span class="text-muted">追更季数</span>
+            <span class="text-zinc-400">追更季数</span>
             <Input v-model.number="seasonNumber" type="number" min="1" max="100" />
           </label>
           <label class="block space-y-1 text-xs">
-            <span class="text-muted">预计总集数</span>
+            <span class="text-zinc-400">预计总集数</span>
             <Input v-model.number="episodeCount" type="number" min="1" max="1000" />
           </label>
         </div>
@@ -280,15 +280,15 @@ const runningTasks = () => tasks.value.filter((t) => t.state === 'running')
         <div>
           <button
             type="button"
-            class="flex items-center gap-1.5 text-xs text-muted hover:text-fg"
+            class="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
             @click="showAdvanced = !showAdvanced"
           >
             <SlidersHorizontal class="h-3 w-3" />
             <span>{{ showAdvanced ? '收起高级选项' : '高级选项 (可选填 TMDB ID)' }}</span>
           </button>
-          <div v-if="showAdvanced" class="mt-2 pt-2 border-t border-border/40">
+          <div v-if="showAdvanced" class="mt-2 pt-2 border-t border-white/[0.04]">
             <label class="block space-y-1 text-xs">
-              <span class="text-muted">TMDB ID</span>
+              <span class="text-zinc-400">TMDB ID</span>
               <Input v-model.number="tmdbId" type="number" placeholder="例如 94954" />
             </label>
           </div>
