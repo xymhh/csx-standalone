@@ -170,6 +170,26 @@ def create_subscription(body: SubscriptionIn, db: Session = Depends(get_db)):
         )
         if media is None:
             fake_tmdb = body.tmdb_id
+            poster_url = None
+            overview = ""
+
+            # 尝试通过 TMDB 补充官方海报与简介
+            from csx.adapters.media.tmdb import TmdbClient
+
+            if body.tmdb_id and body.tmdb_id > 0:
+                detail = TmdbClient.get_detail(m_type, body.tmdb_id)
+                if detail:
+                    poster_url = detail.get("poster_url")
+                    overview = detail.get("overview") or ""
+            elif title:
+                search_res = TmdbClient.search(title)
+                if search_res:
+                    first = search_res[0]
+                    poster_url = first.get("poster_url")
+                    overview = first.get("overview") or ""
+                    if not fake_tmdb and first.get("id"):
+                        fake_tmdb = first.get("id")
+
             if not fake_tmdb:
                 import random
 
@@ -184,6 +204,8 @@ def create_subscription(body: SubscriptionIn, db: Session = Depends(get_db)):
                 type=m_type,
                 year=body.year,
                 tmdb_id=fake_tmdb,
+                poster_url=poster_url,
+                overview=overview,
             )
             db.add(media)
             db.flush()
