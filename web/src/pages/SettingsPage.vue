@@ -9,6 +9,7 @@ import {
   Cloud,
   Cpu,
   Film,
+  Flame,
   FolderOpen,
   FolderSync,
   HardDrive,
@@ -50,23 +51,30 @@ import {
 const navItems = [
   { value: 'accounts', label: '网盘账号' },
   { value: 'drama', label: '追剧与规则' },
+  { value: 'charts', label: '榜单自动订阅' },
   { value: 'sources', label: '搜源站点 (15)' },
   { value: 'playback', label: '播放与整理' },
   { value: 'system', label: '通知与高级' },
 ]
 
-const currentNav = ref('drama')
+const currentNav = ref('accounts')
 const { toast } = useToast()
 
 const accounts = ref<Account[]>([])
 const loading = ref(false)
 const saving = ref(false)
 
+// 网盘新增输入框状态
+const newAccountProvider = ref<'115' | 'quark'>('115')
+const newAccountName = ref('')
+const newAccountCookie = ref('')
+const addingAccount = ref(false)
+
 // 高级参数折叠状态
 const showAdvDrama = ref(false)
-const showAdvTransfer = ref(false)
-const showAdvStrm = ref(false)
-const showAdvSystem = ref(false)
+
+// 榜单子 Tab
+const chartTab = ref<'global' | 'douban' | 'tmdb' | 'bangumi' | 'mikan'>('global')
 
 // 15 个搜索源自描述状态
 const sourceSchemas = ref<SearchSourceSchema[]>([])
@@ -85,9 +93,28 @@ const f = ref<Record<string, any>>({
   subscribe_season_limit: 0,
   window_days: 14,
   language: 'zh-CN',
+  tmdb_api_key: '',
+
+  // 榜单自动订阅 (对齐原 CS 插件)
+  auto_subscribe_enabled: true,
+  auto_subscribe_cron: '0 8,20 * * *',
+  auto_subscribe_notify: true,
   auto_subscribe_min_vote: 7.0,
   auto_subscribe_min_year: 2024,
-  tmdb_api_key: '',
+  // 豆瓣
+  auto_subscribe_douban_enabled: true,
+  auto_subscribe_douban_min_vote: 7.5,
+  auto_subscribe_douban_top250: false,
+  auto_subscribe_douban_hot: true,
+  // TMDB
+  auto_subscribe_tmdb_enabled: true,
+  auto_subscribe_tmdb_min_vote: 7.0,
+  auto_subscribe_tmdb_trending: true,
+  // Bangumi
+  auto_subscribe_bangumi_enabled: true,
+  auto_subscribe_bangumi_min_vote: 7.0,
+  // Mikan
+  auto_subscribe_mikan_enabled: true,
 
   // 网盘转存与画质
   default_drive: 'quark',
@@ -154,6 +181,30 @@ async function loadAccounts() {
   } catch {}
 }
 
+async function handleAddAccountByCookie() {
+  if (!newAccountCookie.value.trim()) {
+    toast('请输入网盘 Cookie 或凭据', 'info')
+    return
+  }
+  addingAccount.value = true
+  try {
+    const finalName = newAccountName.value.trim() || `${newAccountProvider.value === '115' ? '115' : '夸克'}账号`
+    await accountsApi.create({
+      provider: newAccountProvider.value,
+      name: finalName,
+      credential: newAccountCookie.value.trim(),
+    })
+    toast('网盘账号添加成功！', 'success')
+    newAccountCookie.value = ''
+    newAccountName.value = ''
+    await loadAccounts()
+  } catch (cause) {
+    toast(cause instanceof Error ? cause.message : '添加失败', 'error')
+  } finally {
+    addingAccount.value = false
+  }
+}
+
 async function loadSources() {
   try {
     const schemas = await searchSourcesApi.schema()
@@ -216,6 +267,7 @@ async function saveAll() {
       subscribe_season_limit: Number(f.value.subscribe_season_limit),
       window_days: Number(f.value.window_days),
       language: f.value.language,
+      auto_subscribe_enabled: f.value.auto_subscribe_enabled,
       auto_subscribe_min_vote: Number(f.value.auto_subscribe_min_vote),
       auto_subscribe_min_year: Number(f.value.auto_subscribe_min_year),
       tmdb_api_key: f.value.tmdb_api_key,
@@ -358,9 +410,9 @@ async function startQrcode() {
   }
 }
 
-function openScanDialog() {
-  qrProvider.value = '115'
-  qrName.value = '我的115账号'
+function openScanDialog(provider: '115' | 'quark' = '115') {
+  qrProvider.value = provider
+  qrName.value = `我的${provider === '115' ? '115' : '夸克'}账号`
   qrOpen.value = true
   void startQrcode()
 }
@@ -420,43 +472,96 @@ const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === se
     <!-- 紧凑药丸分类导航 -->
     <Tabs v-model="currentNav" :items="navItems" />
 
-    <!-- 1. 网盘账号 -->
-    <div v-if="currentNav === 'accounts'" class="space-y-4">
-      <div class="flex items-center justify-between">
-        <p class="text-xs text-zinc-400">已绑定的网盘将用于转存剧集与生成原画播放链接，凭据已工业级加密。</p>
-        <Button size="sm" class="apple-btn-primary flex items-center gap-1.5" @click="openScanDialog">
-          <QrCode class="h-3.5 w-3.5" />
-          <span>扫码绑定新网盘</span>
-        </Button>
-      </div>
-
-      <div v-if="!accounts.length" class="apple-glass rounded-2xl p-12 text-center space-y-2">
-        <HardDrive class="mx-auto h-7 w-7 text-zinc-600" />
-        <p class="text-sm font-semibold text-white">尚未绑定任何网盘</p>
-        <p class="text-xs text-zinc-500">点击右上角「扫码绑定新网盘」，使用 115 或夸克 App 扫码即可连接。</p>
-      </div>
-
-      <div v-else class="grid gap-3 sm:grid-cols-2">
-        <div
-          v-for="acc in accounts"
-          :key="acc.id"
-          class="apple-glass rounded-xl p-4 flex items-center justify-between"
-        >
-          <div>
-            <div class="flex items-center gap-2">
-              <span class="text-sm font-semibold text-white">{{ acc.name }}</span>
-              <Badge tone="muted" class="text-[10px] uppercase font-mono">{{ acc.provider }}</Badge>
-            </div>
-            <p class="text-[11px] text-emerald-400 flex items-center gap-1 mt-1">
-              <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-              <span>正常连接</span>
-            </p>
+    <!-- 1. 网盘账号 (既能输入 Cookie 也能扫码) -->
+    <div v-if="currentNav === 'accounts'" class="space-y-5">
+      <!-- 新增网盘账号卡片：输入框集成扫码 Icon -->
+      <div class="apple-glass rounded-2xl p-5 space-y-4">
+        <div class="flex items-center justify-between border-b border-white/[0.06] pb-3">
+          <div class="flex items-center gap-2">
+            <Cloud class="h-4 w-4 text-blue-400" />
+            <h3 class="text-sm font-semibold text-white">添加网盘账号</h3>
           </div>
-          <div class="flex items-center gap-1.5">
-            <Button variant="outline" size="sm" class="h-7 text-xs px-2.5" @click="testAccount(acc.id)">检测</Button>
-            <Button variant="ghost" size="sm" class="h-7 w-7 p-0 text-zinc-500 hover:text-rose-400" @click="removeAccount(acc.id)">
-              <Trash2 class="h-3.5 w-3.5" />
+          <span class="text-[11px] text-zinc-400">支持直接粘贴 Cookie，或点击右侧扫码图标手机扫码免密登录</span>
+        </div>
+
+        <div class="grid gap-3 sm:grid-cols-12 items-center">
+          <div class="sm:col-span-3">
+            <Select
+              v-model="newAccountProvider"
+              :options="[
+                { value: '115', label: '115 网盘' },
+                { value: 'quark', label: '夸克网盘' },
+              ]"
+            />
+          </div>
+
+          <div class="sm:col-span-3">
+            <Input v-model="newAccountName" placeholder="账号备注 (如: 我的主号)" />
+          </div>
+
+          <!-- 核心：输入框内置扫码图标 -->
+          <div class="sm:col-span-4 relative flex items-center">
+            <input
+              v-model="newAccountCookie"
+              type="password"
+              placeholder="粘贴 Cookie / Token 凭据"
+              class="w-full h-9 rounded-xl border border-white/10 bg-zinc-900/60 pl-3 pr-10 text-xs text-white placeholder-zinc-500 outline-none focus:border-white/20 transition-colors"
+            />
+            <button
+              type="button"
+              class="absolute right-1.5 p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              title="手机扫码快速登录"
+              @click="openScanDialog(newAccountProvider)"
+            >
+              <QrCode class="h-4 w-4 text-blue-400" />
+            </button>
+          </div>
+
+          <div class="sm:col-span-2">
+            <Button
+              size="sm"
+              class="apple-btn-primary w-full h-9 text-xs"
+              :disabled="addingAccount"
+              @click="handleAddAccountByCookie"
+            >
+              {{ addingAccount ? '添加中…' : '添加网盘' }}
             </Button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 已绑定网盘列表 -->
+      <div class="space-y-3">
+        <h4 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">已连接的网盘</h4>
+
+        <div v-if="!accounts.length" class="apple-glass rounded-2xl p-12 text-center space-y-2">
+          <HardDrive class="mx-auto h-7 w-7 text-zinc-600" />
+          <p class="text-sm font-semibold text-white">尚未绑定任何网盘</p>
+          <p class="text-xs text-zinc-500">在上方粘贴 Cookie 或点击右侧扫码图标，即可绑定你的 115 或夸克网盘。</p>
+        </div>
+
+        <div v-else class="grid gap-3 sm:grid-cols-2">
+          <div
+            v-for="acc in accounts"
+            :key="acc.id"
+            class="apple-glass rounded-xl p-4 flex items-center justify-between"
+          >
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-white">{{ acc.name }}</span>
+                <Badge tone="muted" class="text-[10px] uppercase font-mono">{{ acc.provider }}</Badge>
+              </div>
+              <p class="text-[11px] text-emerald-400 flex items-center gap-1 mt-1">
+                <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                <span>正常连接 · Fernet 工业级加密存储</span>
+              </p>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <Button variant="outline" size="sm" class="h-7 text-xs px-2.5" @click="testAccount(acc.id)">检测</Button>
+              <Button variant="ghost" size="sm" class="h-7 w-7 p-0 text-zinc-500 hover:text-rose-400" @click="removeAccount(acc.id)">
+                <Trash2 class="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -464,7 +569,6 @@ const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === se
 
     <!-- 2. 追剧与规则 (紧凑卡片网格 Bento Grid) -->
     <div v-else-if="currentNav === 'drama'" class="space-y-5">
-      <!-- 2.1 核心自动化两列网格 -->
       <div class="grid gap-4 md:grid-cols-2">
         <!-- 卡片 A: 自动化追剧 -->
         <div class="apple-glass rounded-2xl p-5 space-y-4">
@@ -552,7 +656,7 @@ const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === se
         </div>
       </div>
 
-      <!-- 2.2 存储路径卡片 -->
+      <!-- 存储路径卡片 -->
       <div class="apple-glass rounded-2xl p-5 space-y-3 text-xs">
         <div class="flex items-center gap-2 border-b border-white/[0.06] pb-3">
           <FolderOpen class="h-4 w-4 text-emerald-400" />
@@ -586,7 +690,7 @@ const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === se
         </div>
       </div>
 
-      <!-- 2.3 进阶高级参数折叠区 -->
+      <!-- 进阶高级参数折叠区 -->
       <div class="rounded-2xl border border-white/[0.08] bg-zinc-950/40 overflow-hidden">
         <button
           type="button"
@@ -601,7 +705,7 @@ const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === se
         </button>
 
         <div v-if="showAdvDrama" class="p-5 border-t border-white/[0.06] space-y-4 text-xs">
-          <div class="grid gap-4 sm:grid-cols-3">
+          <div class="grid gap-4 sm:grid-cols-2">
             <div class="space-y-1.5">
               <label class="text-zinc-300">防假种体积门槛 (MB)</label>
               <Input v-model.number="f.min_episode_size_mb" type="number" min="10" />
@@ -609,10 +713,6 @@ const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === se
             <div class="space-y-1.5">
               <label class="text-zinc-300">更新搜索窗口 (天)</label>
               <Input v-model.number="f.window_days" type="number" min="1" />
-            </div>
-            <div class="space-y-1.5">
-              <label class="text-zinc-300">榜单自动订阅最低分</label>
-              <Input v-model.number="f.auto_subscribe_min_vote" type="number" step="0.1" />
             </div>
           </div>
 
@@ -642,20 +742,169 @@ const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === se
       </div>
     </div>
 
-    <!-- 3. 搜源站点 (15 源) -->
-    <div v-else-if="currentNav === 'sources'" class="space-y-4">
-      <div class="flex items-center justify-between">
-        <p class="text-xs text-zinc-400">15 个全网搜索源，支持独立启闭、专属参数微调与连通测速。</p>
-      </div>
+    <!-- 3. 榜单自动订阅 (移入原 CS 插件榜单订阅能力) -->
+    <div v-else-if="currentNav === 'charts'" class="space-y-5">
+      <div class="apple-glass rounded-2xl p-5 space-y-4">
+        <div class="flex items-center justify-between border-b border-white/[0.06] pb-3">
+          <div class="flex items-center gap-2">
+            <Flame class="h-4 w-4 text-orange-400" />
+            <h3 class="text-sm font-semibold text-white">全网榜单自动订阅</h3>
+          </div>
+          <Switch v-model="f.auto_subscribe_enabled" />
+        </div>
 
-      <div class="grid gap-4 lg:grid-cols-[200px_minmax(0,1fr)] items-start">
-        <nav class="apple-glass rounded-xl p-1.5 max-h-[580px] overflow-y-auto space-y-0.5">
+        <p class="text-xs text-zinc-400">
+          每日定时扫描全网各大流行榜单（豆瓣高分/热门、TMDB 流行剧集、Bangumi 番剧周更与 Mikan 番组），命中高分作品自动建档追更并全网搜源。
+        </p>
+
+        <!-- 榜单平台水平小标签 -->
+        <div class="flex items-center gap-2 border-b border-white/[0.06] pb-2 text-xs">
+          <button
+            type="button"
+            class="px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer"
+            :class="chartTab === 'global' ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white'"
+            @click="chartTab = 'global'"
+          >
+            全局调度
+          </button>
+          <button
+            type="button"
+            class="px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer"
+            :class="chartTab === 'douban' ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white'"
+            @click="chartTab = 'douban'"
+          >
+            豆瓣
+          </button>
+          <button
+            type="button"
+            class="px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer"
+            :class="chartTab === 'tmdb' ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white'"
+            @click="chartTab = 'tmdb'"
+          >
+            TMDB
+          </button>
+          <button
+            type="button"
+            class="px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer"
+            :class="chartTab === 'bangumi' ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white'"
+            @click="chartTab = 'bangumi'"
+          >
+            Bangumi 番组
+          </button>
+          <button
+            type="button"
+            class="px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer"
+            :class="chartTab === 'mikan' ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white'"
+            @click="chartTab = 'mikan'"
+          >
+            Mikan 蜜柑
+          </button>
+        </div>
+
+        <!-- 榜单各选项卡配置 -->
+        <div v-if="chartTab === 'global'" class="grid gap-4 sm:grid-cols-2 text-xs pt-2">
+          <div class="space-y-1.5">
+            <label class="font-medium text-white">榜单抓取周期 Cron</label>
+            <Input v-model="f.auto_subscribe_cron" placeholder="0 8,20 * * *" />
+          </div>
+
+          <div class="space-y-1.5">
+            <label class="font-medium text-white">榜单自动订阅最低评分</label>
+            <Input v-model.number="f.auto_subscribe_min_vote" type="number" step="0.1" min="0" max="10" />
+          </div>
+
+          <div class="space-y-1.5">
+            <label class="font-medium text-white">影视上映年份门槛</label>
+            <Input v-model.number="f.auto_subscribe_min_year" type="number" min="2000" />
+          </div>
+
+          <div class="flex items-center justify-between rounded-xl bg-zinc-900/50 p-3 border border-white/[0.06] mt-auto">
+            <div>
+              <p class="font-medium text-white">榜单抓取结果通知</p>
+              <p class="text-[11px] text-zinc-500">发现新高分影视建档后推送到通知渠道</p>
+            </div>
+            <Switch v-model="f.auto_subscribe_notify" />
+          </div>
+        </div>
+
+        <div v-else-if="chartTab === 'douban'" class="space-y-3.5 text-xs pt-2">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="font-medium text-white">启用豆瓣榜单自动订阅</p>
+              <p class="text-[11px] text-zinc-500">定时抓取豆瓣电影热门榜、一周口碑榜与高分榜</p>
+            </div>
+            <Switch v-model="f.auto_subscribe_douban_enabled" />
+          </div>
+
+          <div class="grid gap-3 sm:grid-cols-2 pt-2 border-t border-white/[0.06]">
+            <div class="space-y-1.5">
+              <label class="font-medium text-white">豆瓣最低评分过滤</label>
+              <Input v-model.number="f.auto_subscribe_douban_min_vote" type="number" step="0.1" />
+            </div>
+
+            <div class="flex items-center justify-between rounded-xl bg-zinc-900/50 p-3 border border-white/[0.06]">
+              <div>
+                <p class="font-medium text-white">豆瓣实时热门影视</p>
+                <p class="text-[11px] text-zinc-500">跟踪最新上映爆款热播剧集</p>
+              </div>
+              <Switch v-model="f.auto_subscribe_douban_hot" />
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="chartTab === 'tmdb'" class="space-y-3.5 text-xs pt-2">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="font-medium text-white">启用 TMDB 全球趋势榜单</p>
+              <p class="text-[11px] text-zinc-500">同步全球流媒体平台（Netflix、HBO、Disney+）今日热度榜</p>
+            </div>
+            <Switch v-model="f.auto_subscribe_tmdb_enabled" />
+          </div>
+
+          <div class="space-y-1.5 pt-2 border-t border-white/[0.06]">
+            <label class="font-medium text-white">TMDB 最低大众评分</label>
+            <Input v-model.number="f.auto_subscribe_tmdb_min_vote" type="number" step="0.1" />
+          </div>
+        </div>
+
+        <div v-else-if="chartTab === 'bangumi'" class="space-y-3.5 text-xs pt-2">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="font-medium text-white">启用 Bangumi 每日放送番组榜单</p>
+              <p class="text-[11px] text-zinc-500">自动同步二次元新番排期表与高分新季动画</p>
+            </div>
+            <Switch v-model="f.auto_subscribe_bangumi_enabled" />
+          </div>
+
+          <div class="space-y-1.5 pt-2 border-t border-white/[0.06]">
+            <label class="font-medium text-white">Bangumi 评分过滤门槛</label>
+            <Input v-model.number="f.auto_subscribe_bangumi_min_vote" type="number" step="0.1" />
+          </div>
+        </div>
+
+        <div v-else-if="chartTab === 'mikan'" class="space-y-3.5 text-xs pt-2">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="font-medium text-white">启用 Mikan 蜜柑计划当季番剧追踪</p>
+              <p class="text-[11px] text-zinc-500">自动解析蜜柑日历，关联字幕组番组快速转存</p>
+            </div>
+            <Switch v-model="f.auto_subscribe_mikan_enabled" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. 搜源站点 (15 源：横向可滚动选项栏) -->
+    <div v-else-if="currentNav === 'sources'" class="space-y-4">
+      <!-- 核心改变：水平滚动单行选项导航栏 -->
+      <div class="apple-glass rounded-2xl p-2.5">
+        <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
           <button
             v-for="s in sourceSchemas"
             :key="s.id"
             type="button"
-            class="flex min-h-9 w-full items-center justify-between rounded-lg px-2.5 text-left text-xs font-medium transition-colors cursor-pointer"
-            :class="selectedSourceId === s.id ? 'bg-white/10 text-white' : 'text-zinc-400 hover:bg-white/[0.04]'"
+            class="flex items-center gap-1.5 shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer whitespace-nowrap"
+            :class="selectedSourceId === s.id ? 'bg-white/15 text-white ring-1 ring-white/20' : 'text-zinc-400 hover:text-white hover:bg-white/[0.05]'"
             @click="selectedSourceId = s.id; sourceTest = null"
           >
             <span>{{ s.name }}</span>
@@ -664,59 +913,64 @@ const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === se
               :class="sourceValues[s.id]?.enabled === false ? 'bg-zinc-600' : 'bg-emerald-400'"
             />
           </button>
-        </nav>
+        </div>
+      </div>
 
-        <div v-if="currentSource" class="space-y-3 min-w-0">
-          <div class="apple-glass rounded-xl p-3.5 flex items-center justify-between">
-            <div>
+      <!-- 选中源的参数配置卡片 -->
+      <div v-if="currentSource" class="space-y-4">
+        <div class="apple-glass rounded-2xl p-4 flex items-center justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2">
               <h4 class="text-sm font-semibold text-white">{{ currentSource.name }}</h4>
-              <p class="text-[11px] text-zinc-500">搜索权重优先级：{{ currentSource.order }}</p>
+              <Badge tone="muted" class="text-[10px]">权重 {{ currentSource.order }}</Badge>
             </div>
-            <Button variant="outline" size="sm" class="h-8 text-xs" :disabled="sourceTestRunning" @click="testSelectedSource">
-              <Search class="mr-1.5 h-3 w-3" />
-              <span>{{ sourceTestRunning ? '测试中…' : '测试连通性' }}</span>
-            </Button>
+            <p class="text-xs text-zinc-400 mt-0.5">自描述参数调整与在线网络测试</p>
           </div>
 
-          <div
-            v-if="sourceTest"
-            class="rounded-xl border p-3 text-xs flex items-center justify-between"
-            :class="sourceTest.valid ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-rose-500/30 bg-rose-500/10 text-rose-400'"
-          >
-            <span>{{ sourceTest.valid ? '连通正常' : '连通失败' }}：{{ sourceTest.message }}</span>
-            <span class="font-mono text-[11px]">{{ sourceTest.elapsed_ms }} ms</span>
-          </div>
+          <Button variant="outline" size="sm" class="h-8 text-xs shrink-0" :disabled="sourceTestRunning" @click="testSelectedSource">
+            <Search class="mr-1.5 h-3.5 w-3.5" />
+            <span>{{ sourceTestRunning ? '测试中…' : '测试连通性' }}</span>
+          </Button>
+        </div>
 
-          <div v-for="(group, gIndex) in currentSource.groups" :key="gIndex" class="apple-glass rounded-xl p-4 space-y-3">
-            <h5 class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">{{ group.title || '基本配置' }}</h5>
-            <div class="grid gap-3 sm:grid-cols-2">
-              <div v-for="field in group.fields" :key="field.key" class="space-y-1 text-xs">
-                <label class="font-medium text-white flex items-center justify-between">
-                  <span>{{ field.label }}</span>
-                  <Switch
-                    v-if="field.type === 'switch'"
-                    v-model="sourceValues[currentSource.id][field.key]"
-                  />
-                </label>
-                <p v-if="field.description" class="text-[10px] text-zinc-500">{{ field.description }}</p>
-                <Input
-                  v-if="field.type === 'text' || field.type === 'number'"
+        <div
+          v-if="sourceTest"
+          class="rounded-xl border p-3 text-xs flex items-center justify-between"
+          :class="sourceTest.valid ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-rose-500/30 bg-rose-500/10 text-rose-400'"
+        >
+          <span>{{ sourceTest.valid ? '连通正常' : '连通失败' }}：{{ sourceTest.message }}</span>
+          <span class="font-mono text-[11px]">{{ sourceTest.elapsed_ms }} ms</span>
+        </div>
+
+        <div v-for="(group, gIndex) in currentSource.groups" :key="gIndex" class="apple-glass rounded-2xl p-5 space-y-4">
+          <h5 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">{{ group.title || '参数配置' }}</h5>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div v-for="field in group.fields" :key="field.key" class="space-y-1.5 text-xs">
+              <label class="font-medium text-white flex items-center justify-between">
+                <span>{{ field.label }}</span>
+                <Switch
+                  v-if="field.type === 'switch'"
                   v-model="sourceValues[currentSource.id][field.key]"
-                  :type="field.type === 'number' ? 'number' : 'text'"
                 />
-                <Input
-                  v-else-if="field.type === 'password'"
-                  v-model="sourceValues[currentSource.id][field.key]"
-                  type="password"
-                />
-              </div>
+              </label>
+              <p v-if="field.description" class="text-[11px] text-zinc-500">{{ field.description }}</p>
+              <Input
+                v-if="field.type === 'text' || field.type === 'number'"
+                v-model="sourceValues[currentSource.id][field.key]"
+                :type="field.type === 'number' ? 'number' : 'text'"
+              />
+              <Input
+                v-else-if="field.type === 'password'"
+                v-model="sourceValues[currentSource.id][field.key]"
+                type="password"
+              />
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 4. 播放与整理 (紧凑卡片网格) -->
+    <!-- 5. 播放与整理 (紧凑卡片网格) -->
     <div v-else-if="currentNav === 'playback'" class="space-y-5">
       <div class="grid gap-4 md:grid-cols-2">
         <!-- 卡片 A: STRM 直链播放 -->
@@ -817,7 +1071,7 @@ const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === se
       </div>
     </div>
 
-    <!-- 5. 通知与高级 (紧凑卡片网格) -->
+    <!-- 6. 通知与高级 (紧凑卡片网格) -->
     <div v-else-if="currentNav === 'system'" class="space-y-5">
       <div class="grid gap-4 md:grid-cols-2">
         <!-- 卡片 A: 消息通知渠道 -->
@@ -915,24 +1169,11 @@ const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === se
     </div>
 
     <!-- 扫码绑定网盘 Dialog -->
-    <Dialog :open="qrOpen" title="扫码绑定网盘" @close="closeQrcode">
+    <Dialog :open="qrOpen" :title="`手机扫码绑定 ${qrProvider === '115' ? '115' : '夸克'} 网盘`" @close="closeQrcode">
       <div class="space-y-4">
-        <div class="grid grid-cols-2 gap-3">
-          <label class="block space-y-1 text-xs">
-            <span class="text-zinc-400">网盘类型</span>
-            <Select
-              v-model="qrProvider"
-              :options="[
-                { value: '115', label: '115 网盘' },
-                { value: 'quark', label: '夸克网盘' },
-              ]"
-              @update:model-value="startQrcode"
-            />
-          </label>
-          <label class="block space-y-1 text-xs">
-            <span class="text-zinc-400">账号备注名称</span>
-            <Input v-model="qrName" placeholder="例如：我的主号" />
-          </label>
+        <div class="space-y-1 text-xs">
+          <span class="text-zinc-400">账号备注名称</span>
+          <Input v-model="qrName" placeholder="例如：我的主号" />
         </div>
 
         <div class="flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-zinc-900/60 p-6">
