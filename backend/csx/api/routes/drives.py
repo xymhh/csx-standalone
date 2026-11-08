@@ -64,7 +64,17 @@ def list_account_folders(
     account = db.get(Account, account_id)
     if account is None:
         raise HTTPException(404, detail={"code": "ACCOUNT_NOT_FOUND", "message": "账号不存在"})
-    drive = _drive_for_request(request, db, account.provider)
+    
+    # 针对指定 account_id 实例化专属适配器，确保多账号独立生效
+    try:
+        from csx.adapters.drive.registry import DriveRegistry
+        from csx.infra.credentials import decrypt_credential
+
+        credential = decrypt_credential(account.credential)
+        drive = DriveRegistry.build(account.provider, credential)
+    except Exception:
+        drive = _drive_for_request(request, db, account.provider)
+
     if drive is None:
         raise HTTPException(
             404,

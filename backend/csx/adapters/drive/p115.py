@@ -133,12 +133,33 @@ class P115DriveAdapter:
     def list_directories(self, parent_id: str = "") -> list[CloudDirectory]:
         parent_id = str(parent_id or "0")
         parent_path = self._directory_paths.get(parent_id, "/")
+        
+        # 1. 优先尝试通过 files.manager 按 CID 列目录
         checked, items = self.files.manager.list_files_by_cid_checked(parent_id)
+        
+        # 2. 如果 CID 失败或为空且在根目录，尝试通过 service.list_directories 路径解析
         if not checked:
-            raise RuntimeError(f"列出115目录失败：{parent_path}")
+            try:
+                raw_dirs = self.files.manager.list_directories(parent_path)
+                result = []
+                for d in raw_dirs:
+                    d_id = str(d.get("cid") or d.get("id") or "")
+                    d_name = str(d.get("name") or "")
+                    d_path = str(d.get("path") or posixpath.join(parent_path, d_name))
+                    self._directory_paths[d_id] = d_path
+                    result.append(CloudDirectory(d_id, d_name, d_path, True))
+                return result
+            except Exception as e:
+                raise RuntimeError(f"列出115目录失败：{parent_path}，{e}") from e
+
         result = []
         for item in items:
-            if not bool(item.get("is_dir")):
+            is_dir = bool(
+                item.get("is_dir")
+                or (str(item.get("fid") or "0") == "0" and item.get("cid"))
+                or (item.get("cid") and not item.get("sha1"))
+            )
+            if not is_dir:
                 continue
             directory_id = str(item.get("cid") or item.get("id") or item.get("file_id") or "")
             name = str(item.get("name") or item.get("n") or item.get("file_name") or "")
