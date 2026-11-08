@@ -213,4 +213,25 @@ export const organizeApi = {
     ),
 }
 
+export interface OfflineTask {
+  id: string
+  name: string
+  size: number
+  state: string
+  status_text: string
+  percent: number
+  add_time: number
+  file_id?: string
+  parent_id?: string
+}
+
+export const offlineApi = {
+  tasks: (accountId: number) =>
+    api<OfflineTask[]>(`/api/v1/drives/offline/tasks${qs({ account_id: accountId })}`),
+  add: (body: { account_id: number; url: string; parent_id?: string }) =>
+    api<{ state: boolean }>('/api/v1/drives/offline/add', { method: 'POST', body: JSON.stringify(body) }),
+  delete: (body: { account_id: number; hashes: string[] }) =>
+    api<{ deleted: boolean }>('/api/v1/drives/offline/delete', { method: 'POST', body: JSON.stringify(body) }),
+}
+
 export const doctorApi = { diagnose: () => api<DoctorReport>('/api/v1/doctor') }

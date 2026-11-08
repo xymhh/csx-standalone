@@ -22,6 +22,7 @@ from csx.api.routes import (
     drives,
     duplicate,
     health,
+    offline,
     organize,
     p6,
     resources,
@@ -143,6 +144,7 @@ app.include_router(system.router, prefix="/api/v1")
 app.include_router(sources.router, prefix="/api/v1")
 app.include_router(tg.router, prefix="/api/v1")
 app.include_router(drives.router, prefix="/api/v1")
+app.include_router(offline.router, prefix="/api/v1")
 app.include_router(stream.router, prefix="/api/v1")
 app.include_router(duplicate.router, prefix="/api/v1")
 app.include_router(organize.router, prefix="/api/v1")

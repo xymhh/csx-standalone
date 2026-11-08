@@ -149,3 +149,28 @@ class P115DriveAdapter:
                 CloudDirectory(directory_id, name, path, bool(child_checked and children))
             )
         return result
+
+    def list_offline_tasks(self) -> list[dict]:
+        try:
+            from csx.vendor.drive.p115.offline import OfflineDownloadService
+
+            service = OfflineDownloadService(self.files.manager)
+            return service.get_offline_tasks(force=True)
+        except Exception:
+            return []
+
+    def add_offline_task(self, url: str, parent_id: str = "0") -> dict:
+        client = getattr(self.files.manager, "client", None)
+        if not client:
+            raise RuntimeError("115 client 未初始化")
+        payload = {"url[0]": url, "wp_path_id": parent_id or "0"}
+        return client.clouddownload_task_add_urls(payload)
+
+    def delete_offline_tasks(self, hashes: list[str]) -> bool:
+        try:
+            from csx.vendor.drive.p115.offline import OfflineDownloadService
+
+            service = OfflineDownloadService(self.files.manager)
+            return bool(service.delete_offline_tasks(hashes))
+        except Exception:
+            return False
