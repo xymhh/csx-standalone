@@ -67,7 +67,29 @@ def _resource(repos, task_row: dict) -> dict:
     return result
 
 
-def execute_transfer(session, task_row, *, drives, repos, settings) -> dict:
+def _default_inbox_root(settings) -> str:
+    """账号未配置转存路径时的回退：`<CSX_TRANSFER_ROOT>/_inbox`。"""
+    root = str(getattr(settings, "transfer_root", "CSX") or "").strip().strip("/")
+    return "/" + posixpath.join(root, "_inbox") if root else "/_inbox"
+
+
+def _transfer_layout(settings, cloud_paths: dict | None) -> dict:
+    """本次任务使用的转存/归档路径与分层配置，账号级配置优先。"""
+    paths = cloud_paths or {}
+    raw_library = str(
+        paths.get("media_path") or getattr(settings, "library_root", "") or ""
+    ).strip()
+    library_root = "/" + raw_library.strip("/") if raw_library.strip("/") else ""
+    return {
+        "inbox_root": str(paths.get("transfer_path") or _default_inbox_root(settings)),
+        "library_root": library_root,
+        "type_folder": bool(paths.get("type_folder", False)),
+        "type_movie": str(paths.get("type_movie") or "电影").strip("/") or "电影",
+        "type_tv": str(paths.get("type_tv") or "电视剧").strip("/") or "电视剧",
+    }
+
+
+def execute_transfer(session, task_row, *, drives, repos, settings, cloud_paths=None) -> dict:
     """Run one share transfer and persist each recognized media episode.
 
     ``task_row`` carries resource_id and media_id; repositories provide
@@ -203,8 +225,8 @@ def execute_transfer(session, task_row, *, drives, repos, settings) -> dict:
             next_state = _retry_or_dead_letter(repos, task_id, current_attempt, error)
             return {"ok": False, "task_id": task_id, "state": next_state.value, "error": error}
 
-        inbox_root = str(getattr(settings, "transfer_root", "CSX"))
-        inbox = posixpath.join(inbox_root, "_inbox", key)
+        layout = _transfer_layout(settings, cloud_paths)
+        inbox = posixpath.join(layout["inbox_root"], key)
         try:
             outcome = drive.transfer(
                 share_url,
@@ -259,7 +281,10 @@ def execute_transfer(session, task_row, *, drives, repos, settings) -> dict:
                     drive,
                     file_row,
                     media,
-                    library_root=str(getattr(settings, "library_root", "")),
+                    library_root=layout["library_root"],
+                    type_folder=layout["type_folder"],
+                    type_movie=layout["type_movie"],
+                    type_tv=layout["type_tv"],
                 )
                 repos.library.update_path(file_id=file_id, old_path=path, new_path=target_path)
                 organized_dir = posixpath.dirname(target_path)

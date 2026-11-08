@@ -119,7 +119,6 @@ const f = ref<Record<string, any>>({
 
   // 网盘转存与画质
   default_drive: 'quark',
-  transfer_root: 'CSX',
   type_folder_enabled: false,
   type_folder_movie: '电影',
   type_folder_tv: '电视剧',
@@ -174,7 +173,7 @@ let qrGeneration = 0
 
 // 目录树选择
 const dirDialogOpen = ref(false)
-const dirTarget = ref('transfer_root')
+const dirTarget = ref('account_path')
 
 async function loadAccounts() {
   try {
@@ -276,7 +275,6 @@ async function saveAll() {
 
     const pTransfer = {
       default_drive: f.value.default_drive,
-      transfer_root: f.value.transfer_root,
       type_folder_enabled: f.value.type_folder_enabled,
       type_folder_movie: f.value.type_folder_movie,
       type_folder_tv: f.value.type_folder_tv,
@@ -473,8 +471,6 @@ async function handleAccountDirSelect(path: string) {
     } catch (cause) {
       toast(cause instanceof Error ? cause.message : '更新目录失败', 'error')
     }
-  } else if (dirTarget.value === 'transfer_root') {
-    f.value.transfer_root = path
   } else if (dirTarget.value === 'organize_source_path') {
     f.value.organize_source_path = path
   } else if (dirTarget.value === 'local_mount_root') {
@@ -716,7 +712,7 @@ const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === se
         </div>
       </div>
 
-      <!-- 存储路径卡片 -->
+      <!-- 存储路径说明卡片 -->
       <div class="apple-glass rounded-2xl p-5 space-y-3 text-xs">
         <div class="flex items-center gap-2 border-b border-white/[0.06] pb-3">
           <FolderOpen class="h-4 w-4 text-emerald-400" />
@@ -724,28 +720,37 @@ const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === se
         </div>
 
         <div class="grid gap-3 sm:grid-cols-2">
-          <div class="space-y-1.5">
-            <label class="font-medium text-white">网盘保存根目录</label>
-            <div class="flex gap-2">
-              <Input v-model="f.transfer_root" placeholder="例如 CSX" />
-              <Button
-                v-if="accounts.length"
-                variant="outline"
-                size="sm"
-                class="shrink-0 text-xs"
-                @click="dirTarget = 'transfer_root'; dirDialogOpen = true"
-              >
-                浏览
-              </Button>
-            </div>
+          <div class="rounded-xl border border-white/[0.06] bg-zinc-900/50 p-3 space-y-1">
+            <p class="font-medium text-white">落盘位置由账号卡片决定</p>
+            <p class="text-[11px] leading-relaxed text-zinc-500">
+              每个网盘账号各自的「📦 转存暂存路径」与「🎬 媒体库归档路径」就是文件真实落点，
+              转存时优先用主号、主号受限自动换已启用的备用号，路径随所用账号生效。
+              要改路径请到
+              <button type="button" class="text-emerald-400 underline decoration-dotted" @click="currentNav = 'accounts'">
+                网盘账号
+              </button>
+              页面点对应账号的「选择目录」，本页不再重复设置根目录。
+            </p>
           </div>
 
-          <div class="flex items-center justify-between rounded-xl bg-zinc-900/50 p-3 border border-white/[0.06] mt-auto">
-            <div>
-              <p class="font-medium text-white">按媒体类型分层</p>
-              <p class="text-[11px] text-zinc-500">自动建「电影/电视剧」一级子目录</p>
+          <div class="space-y-3">
+            <div class="flex items-center justify-between rounded-xl bg-zinc-900/50 p-3 border border-white/[0.06]">
+              <div>
+                <p class="font-medium text-white">按媒体类型分层</p>
+                <p class="text-[11px] text-zinc-500">在媒体库路径下自动加一级分类目录</p>
+              </div>
+              <Switch v-model="f.type_folder_enabled" />
             </div>
-            <Switch v-model="f.type_folder_enabled" />
+            <div v-if="f.type_folder_enabled" class="grid grid-cols-2 gap-2">
+              <div class="space-y-1">
+                <label class="text-[11px] text-zinc-400">电影目录名</label>
+                <Input v-model="f.type_folder_movie" placeholder="电影" />
+              </div>
+              <div class="space-y-1">
+                <label class="text-[11px] text-zinc-400">剧集目录名</label>
+                <Input v-model="f.type_folder_tv" placeholder="电视剧" />
+              </div>
+            </div>
           </div>
         </div>
       </div>

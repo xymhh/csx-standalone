@@ -8,6 +8,7 @@ from collections.abc import Iterable
 from pathlib import PurePosixPath
 from typing import Any
 
+from csx.application.organize import media_type_dir
 from csx.domain.naming import build_media_paths, parse_episode_from_name
 
 VIDEO_EXTENSIONS = {"mkv", "mp4", "avi", "mov", "wmv", "ts", "m2ts", "webm", "flv"}
@@ -33,7 +34,13 @@ def _quality(name: str) -> str:
 
 
 def plan_organize(
-    files: Iterable[Any], media_items: Iterable[Any], library_root: str
+    files: Iterable[Any],
+    media_items: Iterable[Any],
+    library_root: str,
+    *,
+    type_folder: bool = False,
+    type_movie: str = "电影",
+    type_tv: str = "电视剧",
 ) -> dict[str, list[dict[str, Any]]]:
     """Return matched and unrecognized drive files without performing I/O."""
     media = list(media_items)
@@ -80,7 +87,14 @@ def plan_organize(
             ext,
             "video",
         )
-        target_path = posixpath.join(str(library_root).rstrip("/"), folder, target_name)
+        target_path = posixpath.join(
+            str(library_root).rstrip("/"),
+            media_type_dir(item.type, type_movie=type_movie, type_tv=type_tv)
+            if type_folder
+            else "",
+            folder,
+            target_name,
+        )
         row.update(
             {
                 "recognized": True,

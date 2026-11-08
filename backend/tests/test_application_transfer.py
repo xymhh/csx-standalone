@@ -75,6 +75,7 @@ class FakeDrive:
 
     def transfer(self, share_url, target_dir, *, file_ids, password="", rename_map=None):
         self.transfers += 1
+        self.last_target_dir = target_dir
         created = [
             (item.file_id, f"{target_dir}/{item.name}", item.size, item.sha1)
             for item in self.files
@@ -179,3 +180,50 @@ def test_duplicate_episode_identity_does_not_depend_on_filename():
     )
     assert len(repos.library.items) == 1
     assert repos.library.items[(10, 1, 1)]["path"] == "another-name.mkv"
+
+
+def test_transfer_uses_account_paths_and_type_folder():
+    drive, repos = FakeDrive(), FakeRepos()
+    row = {
+        "idempotency_key": "account-paths",
+        "resource_id": 1,
+        "media_id": 10,
+        "season": 1,
+        "episode": 1,
+        "resource": {"provider": "quark", "share_url": "url"},
+    }
+    execute_transfer(
+        None,
+        row,
+        drives={"quark": drive},
+        repos=repos,
+        settings=Settings(),
+        cloud_paths={
+            "transfer_path": "/夸克/暂存",
+            "media_path": "/夸克/媒体库",
+            "type_folder": True,
+            "type_movie": "电影",
+            "type_tv": "剧集",
+        },
+    )
+
+    path = next(iter(repos.library.items.values()))["path"]
+    assert path.startswith("/夸克/媒体库/剧集/Example (2024)/Season 01/")
+    assert drive.last_target_dir == "/夸克/暂存/account-paths"
+
+
+def test_transfer_defaults_to_settings_paths_without_cloud_paths():
+    drive, repos = FakeDrive(), FakeRepos()
+    row = {
+        "idempotency_key": "settings-paths",
+        "resource_id": 1,
+        "media_id": 10,
+        "season": 1,
+        "episode": 1,
+        "resource": {"provider": "quark", "share_url": "url"},
+    }
+    execute_transfer(None, row, drives={"quark": drive}, repos=repos, settings=Settings())
+
+    path = next(iter(repos.library.items.values()))["path"]
+    assert path.startswith("/Media/Example (2024)/Season 01/")
+    assert drive.last_target_dir == "/CSX/_inbox/settings-paths"

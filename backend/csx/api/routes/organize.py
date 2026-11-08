@@ -11,10 +11,10 @@ from sqlalchemy.orm import Session
 
 from csx.api.envelope import ok
 from csx.application.organize_scan import plan_organize
+from csx.infra.cloud_paths import resolve_cloud_paths
 from csx.infra.db import get_db
 from csx.infra.drive_runtime import drive_for
 from csx.infra.models import Episode, LibraryFile, MediaItem, Season
-from csx.infra.settings import settings
 
 router = APIRouter(prefix="/organize", tags=["organize"])
 
@@ -40,20 +40,28 @@ def _get_drive(request: Request, db: Session, account_id: int):
         raise HTTPException(
             404, detail={"code": "ACCOUNT_NOT_CONFIGURED", "message": "网盘账号未配置"}
         )
-    return account.provider, drive
+    return account, drive
 
 
-def _plan(db: Session, drive, source_path: str):
+def _plan(db: Session, account, drive, source_path: str):
     files = drive.list_dir(source_path)
     media = db.scalars(select(MediaItem)).all()
-    return plan_organize(files, media, settings.library_root)
+    paths = resolve_cloud_paths(db, account.provider, account.id)
+    return plan_organize(
+        files,
+        media,
+        paths["media_path"],
+        type_folder=paths["type_folder"],
+        type_movie=paths["type_movie"],
+        type_tv=paths["type_tv"],
+    )
 
 
 @router.post("/scan")
 def scan(body: OrganizeScanRequest, request: Request, db: Session = Depends(get_db)):
-    _, drive = _get_drive(request, db, body.account_id)
+    account, drive = _get_drive(request, db, body.account_id)
     try:
-        result = _plan(db, drive, body.source_path)
+        result = _plan(db, account, drive, body.source_path)
     except Exception as error:
         raise HTTPException(
             502, detail={"code": "DRIVE_SCAN_FAILED", "message": str(error)}
@@ -63,9 +71,10 @@ def scan(body: OrganizeScanRequest, request: Request, db: Session = Depends(get_
 
 @router.post("/execute")
 def execute(body: OrganizeExecuteRequest, request: Request, db: Session = Depends(get_db)):
-    provider, drive = _get_drive(request, db, body.account_id)
+    account, drive = _get_drive(request, db, body.account_id)
+    provider = account.provider
     try:
-        plan = _plan(db, drive, body.source_path)
+        plan = _plan(db, account, drive, body.source_path)
     except Exception as error:
         raise HTTPException(
             502, detail={"code": "DRIVE_SCAN_FAILED", "message": str(error)}

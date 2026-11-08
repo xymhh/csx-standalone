@@ -15,6 +15,7 @@ from csx.adapters.drive.registry import DriveRegistry
 from csx.adapters.library import SqlAlchemyTransferRepositories
 from csx.application.transfer import execute_transfer
 from csx.domain.task import TaskState
+from csx.infra.cloud_paths import resolve_cloud_paths
 from csx.infra.db import SessionLocal
 from csx.infra.events import EventBus, event_bus
 from csx.infra.settings import settings
@@ -261,6 +262,7 @@ class TaskScheduler:
                 drives=self.drives,
                 repos=repos,
                 settings=settings,
+                cloud_paths=resolve_cloud_paths(db, provider) if provider else None,
             )
             db.commit()
             task = repos.tasks.get(int(row["id"]))
