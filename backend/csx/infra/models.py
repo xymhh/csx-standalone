@@ -201,6 +201,8 @@ class Account(Base):
     credential: Mapped[str] = mapped_column(Text, nullable=False)
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_primary: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    transfer_path: Mapped[str] = mapped_column(String, default="/CSX/_inbox", nullable=False)
+    media_path: Mapped[str] = mapped_column(String, default="/CSX/媒体库", nullable=False)
     quota_state: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False

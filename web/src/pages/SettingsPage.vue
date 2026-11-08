@@ -449,6 +449,40 @@ async function removeAccount(id: number) {
   toast('账号已解绑', 'info')
 }
 
+const targetAccountForBrowse = ref<Account | null>(null)
+const targetPathType = ref<'transfer' | 'media'>('transfer')
+
+function openAccountDirBrowse(acc: Account, target: 'transfer' | 'media') {
+  targetAccountForBrowse.value = acc
+  targetPathType.value = target
+  dirTarget.value = 'account_path'
+  dirDialogOpen.value = true
+}
+
+async function handleAccountDirSelect(path: string) {
+  if (dirTarget.value === 'account_path' && targetAccountForBrowse.value) {
+    const acc = targetAccountForBrowse.value
+    const updatePayload = targetPathType.value === 'transfer'
+      ? { transfer_path: path }
+      : { media_path: path }
+    try {
+      await accountsApi.update(acc.id, updatePayload)
+      if (targetPathType.value === 'transfer') acc.transfer_path = path
+      else acc.media_path = path
+      toast(`已更新 ${acc.name} 的${targetPathType.value === 'transfer' ? '转存路径' : '媒体库路径'}`, 'success')
+    } catch (cause) {
+      toast(cause instanceof Error ? cause.message : '更新目录失败', 'error')
+    }
+  } else if (dirTarget.value === 'transfer_root') {
+    f.value.transfer_root = path
+  } else if (dirTarget.value === 'organize_source_path') {
+    f.value.organize_source_path = path
+  } else if (dirTarget.value === 'local_mount_root') {
+    f.value.local_mount_root = path
+  }
+  dirDialogOpen.value = false
+}
+
 const accountRefreshing = ref<Record<number, boolean>>({})
 
 async function testAccount(id: number) {
@@ -587,6 +621,7 @@ const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === se
             @remove="removeAccount"
             @toggle="toggleAccountEnabled"
             @set-primary="setAccountPrimary"
+            @browse="openAccountDirBrowse"
           />
         </div>
       </div>
@@ -1237,14 +1272,9 @@ const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === se
     <DirectorySelectDialog
       :open="dirDialogOpen"
       :accounts="accounts"
-      :account-id="accounts[0]?.id"
+      :account-id="targetAccountForBrowse?.id ?? accounts[0]?.id"
       @close="dirDialogOpen = false"
-      @select="(path) => {
-        if (dirTarget === 'transfer_root') f.transfer_root = path;
-        else if (dirTarget === 'organize_source_path') f.organize_source_path = path;
-        else if (dirTarget === 'local_mount_root') f.local_mount_root = path;
-        dirDialogOpen = false;
-      }"
+      @select="handleAccountDirSelect"
     />
   </div>
 </template>

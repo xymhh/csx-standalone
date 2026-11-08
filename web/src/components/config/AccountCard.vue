@@ -4,6 +4,7 @@ import {
   AlertCircle,
   Check,
   Cloud,
+  FolderOpen,
   HardDrive,
   RefreshCw,
   Sparkles,
@@ -26,6 +27,7 @@ const emit = defineEmits<{
   (e: 'remove', id: number): void
   (e: 'toggle', acc: Account): void
   (e: 'set-primary', acc: Account): void
+  (e: 'browse', acc: Account, target: 'transfer' | 'media'): void
 }>()
 
 const info = computed(() => props.account.info || {})
@@ -193,7 +195,44 @@ const usedPct = computed(() => {
         </button>
       </div>
 
-      <!-- 3. 底部操作栏 -->
+      <!-- 3. 网盘转存与媒体库独立目录选择 (对齐原 CS 插件) -->
+      <div class="space-y-2 rounded-xl bg-zinc-950/40 p-3 border border-white/[0.04] text-xs">
+        <div class="space-y-1">
+          <div class="flex items-center justify-between text-[11px]">
+            <span class="text-zinc-400 font-medium">📦 网盘转存暂存路径</span>
+            <button
+              type="button"
+              class="text-blue-400 hover:text-blue-300 transition-colors cursor-pointer flex items-center gap-1"
+              @click="emit('browse', account, 'transfer')"
+            >
+              <FolderOpen class="h-3 w-3" />
+              <span>选择目录</span>
+            </button>
+          </div>
+          <p class="font-mono text-[11px] text-white bg-zinc-900/80 px-2.5 py-1.5 rounded-lg border border-white/5 truncate">
+            {{ account.transfer_path || '/CSX/_inbox' }}
+          </p>
+        </div>
+
+        <div class="space-y-1 pt-1 border-t border-white/[0.04]">
+          <div class="flex items-center justify-between text-[11px]">
+            <span class="text-zinc-400 font-medium">🎬 媒体库归档最终路径</span>
+            <button
+              type="button"
+              class="text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer flex items-center gap-1"
+              @click="emit('browse', account, 'media')"
+            >
+              <FolderOpen class="h-3 w-3" />
+              <span>选择目录</span>
+            </button>
+          </div>
+          <p class="font-mono text-[11px] text-white bg-zinc-900/80 px-2.5 py-1.5 rounded-lg border border-white/5 truncate">
+            {{ account.media_path || '/CSX/媒体库' }}
+          </p>
+        </div>
+      </div>
+
+      <!-- 4. 底部操作栏 -->
       <div class="flex items-center justify-between pt-2 border-t border-white/[0.04] text-[11px] text-zinc-500">
         <span class="font-mono">ID: {{ account.id }} · {{ account.provider === '115' ? '115 网盘' : '夸克网盘' }}</span>
         <Button

@@ -87,6 +87,8 @@ export interface Account {
   name: string
   is_enabled: boolean
   is_primary: boolean
+  transfer_path: string
+  media_path: string
   has_credential: boolean
   masked: string
   info?: AccountProfile
@@ -175,8 +177,8 @@ export const telegramApi = {
 }
 export const accountsApi = {
   list: () => api<Account[]>('/api/v1/accounts'),
-  create: (body: { provider: string; credential: string; name: string; is_enabled?: boolean; is_primary?: boolean }) => api<Account>('/api/v1/accounts', { method: 'POST', body: JSON.stringify(body) }),
-  update: (id: number, body: { credential?: string; name?: string; is_enabled?: boolean; is_primary?: boolean }) => api<Account>(`/api/v1/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  create: (body: { provider: string; credential: string; name: string; is_enabled?: boolean; is_primary?: boolean; transfer_path?: string; media_path?: string }) => api<Account>('/api/v1/accounts', { method: 'POST', body: JSON.stringify(body) }),
+  update: (id: number, body: { credential?: string; name?: string; is_enabled?: boolean; is_primary?: boolean; transfer_path?: string; media_path?: string }) => api<Account>(`/api/v1/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: (id: number) => api<{ deleted: boolean }>(`/api/v1/accounts/${id}`, { method: 'DELETE' }),
   test: (id: number) => api<AccountTest>(`/api/v1/accounts/${id}/test`, { method: 'POST' }),
   startQrcode: (provider: '115' | 'quark') => api<QrcodeStartResponse>('/api/v1/accounts/qrcode/start', { method: 'POST', body: JSON.stringify({ provider }) }),

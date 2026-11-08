@@ -94,6 +94,8 @@ class AccountIn(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     is_enabled: bool = True
     is_primary: bool = False
+    transfer_path: str = Field(default="/CSX/_inbox", max_length=256)
+    media_path: str = Field(default="/CSX/媒体库", max_length=256)
 
 
 class AccountPatch(BaseModel):
@@ -101,6 +103,8 @@ class AccountPatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=128)
     is_enabled: bool | None = None
     is_primary: bool | None = None
+    transfer_path: str | None = Field(default=None, max_length=256)
+    media_path: str | None = Field(default=None, max_length=256)
 
 
 class QrcodeStartRequest(BaseModel):
@@ -724,6 +728,8 @@ def _account_data(row: Account) -> dict:
         "name": row.name,
         "is_enabled": getattr(row, "is_enabled", True),
         "is_primary": getattr(row, "is_primary", False),
+        "transfer_path": getattr(row, "transfer_path", "/CSX/_inbox"),
+        "media_path": getattr(row, "media_path", "/CSX/媒体库"),
         "has_credential": bool(row.credential),
         "masked": "***" if row.credential else "",
         "info": info,
@@ -817,6 +823,8 @@ def create_account(body: AccountIn, db: Session = Depends(get_db)):
         name=body.name,
         is_enabled=body.is_enabled,
         is_primary=body.is_primary if has_same else True,
+        transfer_path=body.transfer_path,
+        media_path=body.media_path,
     )
     if row.is_primary:
         # 其他同类账号取消 primary
@@ -843,6 +851,10 @@ def update_account(
         row.name = values["name"]
     if values.get("is_enabled") is not None:
         row.is_enabled = values["is_enabled"]
+    if values.get("transfer_path") is not None:
+        row.transfer_path = values["transfer_path"]
+    if values.get("media_path") is not None:
+        row.media_path = values["media_path"]
     if values.get("is_primary") is not None and values["is_primary"]:
         # 取消同类其他主号
         for other in db.scalars(select(Account).where(Account.provider == row.provider)).all():
