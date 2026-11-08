@@ -23,18 +23,19 @@ watch(() => props.accountId, (id) => {
     activeAccountId.value = id
     if (props.open) void loadRoot()
   }
-})
+}, { immediate: true })
+
 watch(() => props.open, (open) => {
   if (open) {
-    if (!activeAccountId.value && props.accounts?.length) {
-      activeAccountId.value = props.accounts[0].id
-    }
+    // 每次打开弹窗，强制对齐 props 传入的指定账号
+    activeAccountId.value = props.accountId ?? (props.accounts?.length ? props.accounts[0].id : null)
     void loadRoot()
   }
 })
+
 watch(() => props.accounts, (accounts) => {
   if (!activeAccountId.value && accounts?.length) {
-    activeAccountId.value = accounts[0].id
+    activeAccountId.value = props.accountId ?? accounts[0].id
     if (props.open) void loadRoot()
   }
 }, { immediate: true })

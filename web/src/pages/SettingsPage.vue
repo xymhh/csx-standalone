@@ -1270,6 +1270,7 @@ const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === se
 
     <!-- 目录树选择弹窗 -->
     <DirectorySelectDialog
+      v-if="dirDialogOpen"
       :open="dirDialogOpen"
       :accounts="accounts"
       :account-id="targetAccountForBrowse?.id ?? accounts[0]?.id"
