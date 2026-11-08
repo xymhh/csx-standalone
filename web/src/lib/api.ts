@@ -70,8 +70,32 @@ export interface DriveFolder { id: string; name: string; path: string; has_child
 export interface ShareInspectFile { id: string; name: string; size: number; is_dir: boolean }
 export interface LibraryFile { id: number; media_id: number; path: string; size: number; sha1: string; quality_bucket: string; provider?: string; created_at: string }
 export interface LibraryServer { provider: string; configured: boolean; valid: boolean | null }
-export interface Account { id: number; provider: string; name: string; has_credential: boolean; masked: string }
-export interface AccountTest { valid: boolean; provider: string; message: string }
+export interface AccountProfile {
+  user_name?: string
+  is_vip?: boolean
+  vip_expire?: string
+  total_space?: string
+  used_space?: string
+  remaining_space?: string
+}
+
+export interface Account {
+  id: number
+  provider: string
+  name: string
+  is_enabled: boolean
+  is_primary: boolean
+  has_credential: boolean
+  masked: string
+  info?: AccountProfile
+}
+
+export interface AccountTest {
+  valid: boolean
+  provider: string
+  message: string
+  info?: AccountProfile
+}
 export interface QrcodeStartResponse { provider: '115' | 'quark'; qrcode: string; token_data: Record<string, string>; hint: string }
 export interface QrcodeCheckResponse { status: 'waiting' | 'scanned' | 'success' | 'expired'; message: string; account: Account | null }
 export interface DoctorReport { database?: { ok: boolean; size_bytes: number; error: string }; accounts?: Array<Record<string, unknown>>; scheduler?: { running: boolean; active_workers: number; waiting_queue_depth: number }; disk?: Record<string, unknown> }
@@ -149,8 +173,8 @@ export const telegramApi = {
 }
 export const accountsApi = {
   list: () => api<Account[]>('/api/v1/accounts'),
-  create: (body: { provider: string; credential: string; name: string }) => api<Account>('/api/v1/accounts', { method: 'POST', body: JSON.stringify(body) }),
-  update: (id: number, body: { credential?: string; name?: string }) => api<Account>(`/api/v1/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  create: (body: { provider: string; credential: string; name: string; is_enabled?: boolean; is_primary?: boolean }) => api<Account>('/api/v1/accounts', { method: 'POST', body: JSON.stringify(body) }),
+  update: (id: number, body: { credential?: string; name?: string; is_enabled?: boolean; is_primary?: boolean }) => api<Account>(`/api/v1/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: (id: number) => api<{ deleted: boolean }>(`/api/v1/accounts/${id}`, { method: 'DELETE' }),
   test: (id: number) => api<AccountTest>(`/api/v1/accounts/${id}/test`, { method: 'POST' }),
   startQrcode: (provider: '115' | 'quark') => api<QrcodeStartResponse>('/api/v1/accounts/qrcode/start', { method: 'POST', body: JSON.stringify({ provider }) }),

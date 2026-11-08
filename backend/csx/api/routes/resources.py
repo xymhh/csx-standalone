@@ -24,7 +24,7 @@ from csx.domain.resource import idempotency_key
 from csx.domain.subscription import SubscriptionScope
 from csx.domain.task import TaskState
 from csx.domain.upgrade import UpgradeAction, decide_upgrade
-from csx.infra.credentials import encrypt_credential
+from csx.infra.credentials import decrypt_credential, encrypt_credential
 from csx.infra.db import SessionLocal, get_db
 from csx.infra.drive_runtime import drive_for
 from csx.infra.events import event_bus
@@ -92,11 +92,15 @@ class AccountIn(BaseModel):
     provider: str = Field(min_length=1, max_length=32)
     credential: str = Field(min_length=1)
     name: str = Field(min_length=1, max_length=128)
+    is_enabled: bool = True
+    is_primary: bool = False
 
 
 class AccountPatch(BaseModel):
     credential: str | None = Field(default=None, min_length=1)
     name: str | None = Field(default=None, min_length=1, max_length=128)
+    is_enabled: bool | None = None
+    is_primary: bool | None = None
 
 
 class QrcodeStartRequest(BaseModel):
@@ -708,12 +712,21 @@ def test_provider(provider: str, request: Request, db: Session = Depends(get_db)
 
 
 def _account_data(row: Account) -> dict:
+    info = {}
+    try:
+        if row.quota_state:
+            info = json.loads(row.quota_state)
+    except Exception:
+        info = {}
     return {
         "id": row.id,
         "provider": row.provider,
         "name": row.name,
+        "is_enabled": getattr(row, "is_enabled", True),
+        "is_primary": getattr(row, "is_primary", False),
         "has_credential": bool(row.credential),
         "masked": "***" if row.credential else "",
+        "info": info,
     }
 
 
@@ -754,13 +767,19 @@ def check_account_qrcode(
         if body.auto_save:
             if not body.name.strip():
                 _raise(422, "INVALID_ACCOUNT_NAME", "账号备注名称不能为空")
-            if db.scalar(select(Account).where(Account.provider == body.provider)) is not None:
-                _raise(409, "ACCOUNT_EXISTS", "该网盘类型已有绑定账号，请先删除或更换现有账号")
             try:
                 encrypted = encrypt_credential(cookie)
             except RuntimeError as error:
                 _raise(503, "SECRET_KEY_REQUIRED", str(error))
-            account = Account(provider=body.provider, name=body.name.strip(), credential=encrypted)
+            # 同类首个账号设为 primary
+            has_same = db.scalar(select(Account).where(Account.provider == body.provider)) is not None
+            account = Account(
+                provider=body.provider,
+                name=body.name.strip(),
+                credential=encrypted,
+                is_enabled=True,
+                is_primary=not has_same,
+            )
             db.add(account)
             db.commit()
             db.refresh(account)
@@ -787,13 +806,22 @@ def create_account(body: AccountIn, db: Session = Depends(get_db)):
     provider = body.provider.lower()
     if provider not in {"115", "quark"}:
         _raise(422, "UNSUPPORTED_PROVIDER", "目前支持 115 和 quark")
-    if db.scalar(select(Account).where(Account.provider == provider)) is not None:
-        _raise(409, "ACCOUNT_EXISTS", "该网盘账号已存在")
     try:
         credential = encrypt_credential(body.credential)
     except RuntimeError as error:
         _raise(503, "SECRET_KEY_REQUIRED", str(error))
-    row = Account(provider=provider, credential=credential, name=body.name)
+    has_same = db.scalar(select(Account).where(Account.provider == provider)) is not None
+    row = Account(
+        provider=provider,
+        credential=credential,
+        name=body.name,
+        is_enabled=body.is_enabled,
+        is_primary=body.is_primary if has_same else True,
+    )
+    if row.is_primary:
+        # 其他同类账号取消 primary
+        for other in db.scalars(select(Account).where(Account.provider == provider)).all():
+            other.is_primary = False
     db.add(row)
     db.commit()
     db.refresh(row)
@@ -813,14 +841,22 @@ def update_account(
     values = body.model_dump(exclude_unset=True)
     if values.get("name") is not None:
         row.name = values["name"]
+    if values.get("is_enabled") is not None:
+        row.is_enabled = values["is_enabled"]
+    if values.get("is_primary") is not None and values["is_primary"]:
+        # 取消同类其他主号
+        for other in db.scalars(select(Account).where(Account.provider == row.provider)).all():
+            other.is_primary = False
+        row.is_primary = True
+    elif values.get("is_primary") is not None:
+        row.is_primary = False
     if values.get("credential") is not None:
         try:
             row.credential = encrypt_credential(values["credential"])
         except RuntimeError as error:
             _raise(503, "SECRET_KEY_REQUIRED", str(error))
     db.commit()
-    if values.get("credential") is not None:
-        getattr(request.app.state, "drives", {}).pop(row.provider, None)
+    getattr(request.app.state, "drives", {}).pop(row.provider, None)
     return ok(_account_data(row))
 
 
@@ -842,8 +878,23 @@ def test_account(account_id: int, request: Request, db: Session = Depends(get_db
     if row is None:
         _raise(404, "ACCOUNT_NOT_FOUND", "账号不存在")
     try:
-        _drive_for(request, db, row.provider).list_dir("/")
-        return ok({"valid": True, "provider": row.provider, "message": "连通正常"})
+        drive = getattr(request.app.state, "drives", {}).get(row.provider)
+        if drive is None:
+            credential = decrypt_credential(row.credential)
+            drive = DriveRegistry.build(row.provider, credential)
+        drive.list_dir("/")
+
+        info = {}
+        try:
+            credential = decrypt_credential(row.credential)
+            info = DriveRegistry.get_account_profile(row.provider, credential)
+            if info:
+                row.quota_state = json.dumps(info, ensure_ascii=False)
+                db.commit()
+        except Exception:
+            pass
+
+        return ok({"valid": True, "provider": row.provider, "message": "连通正常", "info": info})
     except Exception as error:
         return ok({"valid": False, "provider": row.provider, "message": str(error)})
 

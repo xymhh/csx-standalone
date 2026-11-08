@@ -17,7 +17,12 @@ def drive_for(db: Session, provider: str, configured: dict[str, object] | None =
     drives = configured or {}
     if provider in drives:
         return drives[provider]
-    account = db.query(Account).filter(Account.provider == provider).first()
+    account = (
+        db.query(Account)
+        .filter(Account.provider == provider, Account.is_enabled.is_(True))
+        .order_by(Account.is_primary.desc(), Account.id.asc())
+        .first()
+    )
     if account is None:
         return None
     credential = decrypt_credential(account.credential)

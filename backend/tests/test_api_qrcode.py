@@ -166,7 +166,7 @@ def test_qrcode_endpoints_require_login(client):
     )
 
 
-def test_qrcode_auto_save_respects_one_account_per_provider(client, monkeypatch):
+def test_qrcode_auto_save_allows_multiple_accounts(client, monkeypatch):
     _login(client)
     _delete_provider("quark")
     monkeypatch.setattr(settings, "secret_key", "qr-test-secret-key")
@@ -184,10 +184,9 @@ def test_qrcode_auto_save_respects_one_account_per_provider(client, monkeypatch)
     assert first.status_code == 200
     response = client.post(
         "/api/v1/accounts/qrcode/check",
-        json={"provider": "quark", "token_data": {"qr_token": "token"}},
+        json={"provider": "quark", "token_data": {"qr_token": "token"}, "name": "新扫码账号"},
     )
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "ACCOUNT_EXISTS"
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == "success"
     with SessionLocal() as db:
-        assert db.query(Account).filter_by(provider="quark").one().name == "原有账号"
-    client.delete(f"/api/v1/accounts/{first.json()['data']['id']}")
+        assert db.query(Account).filter_by(provider="quark").count() == 2

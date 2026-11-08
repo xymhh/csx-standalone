@@ -417,6 +417,31 @@ function openScanDialog(provider: '115' | 'quark' = '115') {
   void startQrcode()
 }
 
+async function toggleAccountEnabled(account: Account) {
+  try {
+    await accountsApi.update(account.id, { is_enabled: !account.is_enabled })
+    account.is_enabled = !account.is_enabled
+    toast(account.is_enabled ? '已启用该账号' : '已暂停该账号', 'info')
+  } catch (cause) {
+    toast(cause instanceof Error ? cause.message : '更新状态失败', 'error')
+  }
+}
+
+async function setAccountPrimary(account: Account) {
+  if (account.is_primary) return
+  try {
+    await accountsApi.update(account.id, { is_primary: true })
+    for (const a of accounts.value) {
+      if (a.provider === account.provider) {
+        a.is_primary = (a.id === account.id)
+      }
+    }
+    toast(`已将 ${account.name} 设为默认${account.provider === '115' ? '115' : '夸克'}主号`, 'success')
+  } catch (cause) {
+    toast(cause instanceof Error ? cause.message : '设置主号失败', 'error')
+  }
+}
+
 async function removeAccount(id: number) {
   await accountsApi.delete(id)
   await loadAccounts()
@@ -427,6 +452,10 @@ async function testAccount(id: number) {
   try {
     const res = await accountsApi.test(id)
     toast(`${res.provider}网盘：${res.message}`, res.valid ? 'success' : 'error')
+    if (res.info) {
+      const target = accounts.value.find((a) => a.id === id)
+      if (target) target.info = res.info
+    }
   } catch (cause) {
     toast(cause instanceof Error ? cause.message : '检测失败', 'error')
   }
@@ -540,27 +569,81 @@ const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === se
           <p class="text-xs text-zinc-500">在上方粘贴 Cookie 或点击右侧扫码图标，即可绑定你的 115 或夸克网盘。</p>
         </div>
 
-        <div v-else class="grid gap-3 sm:grid-cols-2">
+        <div v-else class="grid gap-4 sm:grid-cols-2">
           <div
             v-for="acc in accounts"
             :key="acc.id"
-            class="apple-glass rounded-xl p-4 flex items-center justify-between"
+            class="apple-glass rounded-2xl p-5 space-y-4 border transition-all"
+            :class="acc.is_enabled ? 'border-white/10' : 'border-white/5 opacity-60'"
           >
-            <div>
-              <div class="flex items-center gap-2">
-                <span class="text-sm font-semibold text-white">{{ acc.name }}</span>
-                <Badge tone="muted" class="text-[10px] uppercase font-mono">{{ acc.provider }}</Badge>
+            <!-- 头部：网盘图标、账号名、主号标记与启闭开关 -->
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-center gap-3">
+                <div
+                  class="h-10 w-10 rounded-xl flex items-center justify-center font-bold text-sm shadow-inner shrink-0"
+                  :class="acc.provider === '115' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'"
+                >
+                  {{ acc.provider === '115' ? '115' : '夸克' }}
+                </div>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm font-semibold text-white">{{ acc.name }}</span>
+                    <button
+                      type="button"
+                      class="px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors cursor-pointer"
+                      :class="acc.is_primary ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-white/5 text-zinc-500 hover:text-zinc-300 border border-white/5'"
+                      :title="acc.is_primary ? '默认转存主号' : '点击设为此网盘的默认主号'"
+                      @click="setAccountPrimary(acc)"
+                    >
+                      {{ acc.is_primary ? '★ 主账号' : '设为主号' }}
+                    </button>
+                  </div>
+                  <p class="text-[11px] flex items-center gap-1.5 mt-1">
+                    <span
+                      class="h-2 w-2 rounded-full"
+                      :class="acc.is_enabled ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]' : 'bg-zinc-600'"
+                    />
+                    <span :class="acc.is_enabled ? 'text-zinc-300' : 'text-zinc-500'">
+                      {{ acc.is_enabled ? (acc.info?.user_name ? `${acc.info.user_name} (在线)` : '已启用 · 正常连接') : '已暂停 (不参与转存)' }}
+                    </span>
+                  </p>
+                </div>
               </div>
-              <p class="text-[11px] text-emerald-400 flex items-center gap-1 mt-1">
-                <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-                <span>正常连接 · Fernet 工业级加密存储</span>
-              </p>
+
+              <!-- 右上角独立启闭开关 -->
+              <div class="flex items-center gap-3">
+                <Switch
+                  :model-value="acc.is_enabled"
+                  @update:model-value="toggleAccountEnabled(acc)"
+                />
+              </div>
             </div>
-            <div class="flex items-center gap-1.5">
-              <Button variant="outline" size="sm" class="h-7 text-xs px-2.5" @click="testAccount(acc.id)">检测</Button>
-              <Button variant="ghost" size="sm" class="h-7 w-7 p-0 text-zinc-500 hover:text-rose-400" @click="removeAccount(acc.id)">
-                <Trash2 class="h-3.5 w-3.5" />
-              </Button>
+
+            <!-- 中间：容量进度条与 VIP 徽章 -->
+            <div v-if="acc.info?.total_space" class="space-y-1.5 rounded-xl bg-zinc-900/60 p-3 border border-white/5 text-xs">
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="text-zinc-400">已用 {{ acc.info.used_space || '未知' }} / {{ acc.info.total_space }}</span>
+                <span v-if="acc.info.is_vip" class="text-amber-400 font-medium">VIP {{ acc.info.vip_expire }}</span>
+              </div>
+              <div class="h-1.5 w-full rounded-full bg-zinc-800 overflow-hidden">
+                <div class="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full" style="width: 45%" />
+              </div>
+              <p class="text-[10px] text-zinc-500">剩余可用：{{ acc.info.remaining_space || '充裕' }}</p>
+            </div>
+            <div v-else class="rounded-xl bg-zinc-900/40 p-2.5 border border-white/5 text-[11px] text-zinc-500 flex items-center justify-between">
+              <span>凭据已通过 Fernet 工业级加密存储</span>
+              <span class="text-[10px] text-zinc-600">点击「检测刷新」同步网盘容量</span>
+            </div>
+
+            <!-- 底部操作按钮 -->
+            <div class="flex items-center justify-between pt-1 border-t border-white/[0.04] text-xs">
+              <span class="text-[11px] font-mono text-zinc-500">ID: {{ acc.id }}</span>
+              <div class="flex items-center gap-2">
+                <Button variant="outline" size="sm" class="h-7 text-xs px-2.5" @click="testAccount(acc.id)">检测刷新</Button>
+                <Button variant="ghost" size="sm" class="h-7 w-7 p-0 text-zinc-500 hover:text-rose-400" @click="removeAccount(acc.id)">
+                  <Trash2 class="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </div>
           </div>
         </div>

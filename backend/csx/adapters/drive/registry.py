@@ -124,11 +124,18 @@ class DriveRegistry:
 
     @classmethod
     def from_session(cls, db: Session) -> dict[str, object]:
-        return {
-            account.provider: cls.build(account.provider, decrypt_credential(account.credential))
-            for account in db.query(Account).all()
-            if account.provider in {"115", "quark"}
-        }
+        # 针对每个 provider，优先选取 is_enabled=True 且 is_primary=True 的账号
+        accounts = (
+            db.query(Account)
+            .filter(Account.is_enabled.is_(True))
+            .order_by(Account.is_primary.desc(), Account.id.asc())
+            .all()
+        )
+        res = {}
+        for acc in accounts:
+            if acc.provider in {"115", "quark"} and acc.provider not in res:
+                res[acc.provider] = cls.build(acc.provider, decrypt_credential(acc.credential))
+        return res
 
     @staticmethod
     def from_environment() -> dict[str, object]:
@@ -157,9 +164,47 @@ class DriveRegistry:
             checkin_url = str(
                 config.get("quark_checkin_url") or config.get("_quark_checkin_url") or ""
             )
-            client = QuarkClient(cookie=credential, checkin_url=checkin_url)
+            return QuarkClient.run_checkin(credential, checkin_url)
+        raise ValueError(f"check-in unsupported for {provider}")
+
+    @staticmethod
+    def get_account_profile(provider: str, credential: str) -> dict:
+        """Fetch account capacity, nickname, and VIP info behind drive adapter boundary."""
+        provider = provider.lower()
+        if provider == "115":
             try:
-                return client.checkin("normal")
-            finally:
-                client.close()
-        raise ValueError(f"unsupported check-in provider: {provider}")
+                from csx.vendor.drive.p115.client import P115ClientManager
+
+                mgr = P115ClientManager(credential)
+                user_res = mgr._rate_limited_call(mgr.client.user_my_info)
+                user_data = (user_res or {}).get("data") or {}
+                space_res = mgr._rate_limited_call(mgr.client.fs_index_info, payload=0)
+                space_data = ((space_res or {}).get("data") or {}).get("space_info") or {}
+                vip_data = user_data.get("vip") or {}
+                is_forever = bool(vip_data.get("is_forever"))
+                is_vip = bool(vip_data.get("is_vip")) or is_forever
+                return {
+                    "user_name": str(user_data.get("uname") or ""),
+                    "is_vip": is_vip,
+                    "vip_expire": "永久" if is_forever else str(vip_data.get("expire_str") or ""),
+                    "total_space": str((space_data.get("all_total") or {}).get("size_format") or ""),
+                    "used_space": str((space_data.get("all_use") or {}).get("size_format") or ""),
+                    "remaining_space": str((space_data.get("all_remain") or {}).get("size_format") or ""),
+                }
+            except Exception:
+                return {}
+        if provider == "quark":
+            try:
+                from csx.vendor.drive.quark.client import QuarkClient
+
+                qc = QuarkClient(cookie=credential)
+                cap = qc.get_capacity() or {}
+                return {
+                    "user_name": "夸克用户",
+                    "total_space": str(cap.get("total_format") or ""),
+                    "used_space": str(cap.get("used_format") or ""),
+                    "remaining_space": str(cap.get("remaining_format") or ""),
+                }
+            except Exception:
+                return {}
+        return {}
