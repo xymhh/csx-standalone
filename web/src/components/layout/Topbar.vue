@@ -15,6 +15,7 @@ const route = useRoute()
 const transferDialogOpen = ref(false)
 
 const titles: Record<string, string> = {
+  '/discover': '探索推荐 · TMDB 官方热播榜',
   '/': '我的追剧',
   '/search': '搜全网资源',
   '/tasks': '传输与下载',

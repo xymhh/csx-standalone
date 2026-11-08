@@ -30,6 +30,7 @@ from csx.api.routes import (
     stream,
     system,
     tg,
+    tmdb,
 )
 from csx.application.auth import session_user
 from csx.infra.bootstrap import ensure_admin, init_db
@@ -148,6 +149,7 @@ app.include_router(offline.router, prefix="/api/v1")
 app.include_router(stream.router, prefix="/api/v1")
 app.include_router(duplicate.router, prefix="/api/v1")
 app.include_router(organize.router, prefix="/api/v1")
+app.include_router(tmdb.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["meta"])

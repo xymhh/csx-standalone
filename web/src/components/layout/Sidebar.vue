@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   Clapperboard,
+  Compass,
   DownloadCloud,
   Film,
   Library,
@@ -23,8 +24,9 @@ const emit = defineEmits<{ close: []; compactChange: [compact: boolean] }>()
 const route = useRoute()
 const compact = ref(false)
 
-// 5 大众化核心导航菜单（符合大众直觉，不头晕）
+// 6 大众化核心导航菜单（探索、追剧、找源、传输、媒体库、设置）
 const mainLinks = [
+  { path: '/discover', label: '探索推荐', icon: Compass, match: (p: string) => p === '/discover' },
   { path: '/', label: '我的追剧', icon: Tv, match: (p: string) => p === '/' || p === '/baseline' || p === '/progress' },
   { path: '/search', label: '搜全网资源', icon: Search, match: (p: string) => p === '/search' || p === '/radar' },
   { path: '/tasks', label: '传输与下载', icon: DownloadCloud, match: (p: string) => p === '/tasks' || p === '/candidates' || p === '/history' },

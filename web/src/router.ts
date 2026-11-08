@@ -16,6 +16,7 @@ const router = createRouter({
       component: () => import('@/components/layout/AppLayout.vue'),
       children: [
         { path: '', name: 'dashboard', component: () => import('@/pages/DashboardPage.vue') },
+        { path: 'discover', name: 'discover', component: () => import('@/pages/DiscoverPage.vue') },
         { path: 'progress', name: 'progress', component: () => import('@/pages/ProgressPage.vue') },
         { path: 'baseline', name: 'baseline', component: () => import('@/pages/BaselinePage.vue') },
         { path: 'radar', name: 'radar', component: () => import('@/pages/RadarPage.vue') },
