@@ -97,6 +97,7 @@ const form = ref<Record<string, any>>({
   window_days: 14,
   language: 'zh-CN',
   scan_interval_seconds: 30,
+  tmdb_api_key: '',
   default_drive: 'quark',
   transfer_root: 'CSX',
   upgrade_enabled: true,
@@ -129,6 +130,7 @@ async function loadSettings() {
     form.value.window_days = Number(d.window_days ?? 14)
     form.value.language = String(d.language ?? 'zh-CN')
     form.value.scan_interval_seconds = Number(d.scan_interval_seconds ?? 30)
+    form.value.tmdb_api_key = String(d.tmdb_api_key ?? '')
   } else if (sec === 'transfer') {
     form.value.default_drive = String(d.default_drive ?? 'quark')
     form.value.transfer_root = String(d.transfer_root ?? 'CSX')
@@ -209,6 +211,7 @@ async function save() {
         window_days: Number(form.value.window_days),
         language: form.value.language,
         scan_interval_seconds: Number(form.value.scan_interval_seconds),
+        tmdb_api_key: String(form.value.tmdb_api_key || '').trim(),
       }
     } else if (sec === 'transfer') {
       payload = {
@@ -564,7 +567,7 @@ const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === se
               </div>
             </div>
 
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/40 pb-4">
               <div>
                 <label class="text-sm font-medium text-fg">自动检查更新频率</label>
                 <p class="text-xs text-muted mt-0.5">后台自动轮询追剧清单与排队任务的间隔秒数</p>
@@ -572,6 +575,16 @@ const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === se
               <div class="w-full sm:w-48 flex items-center gap-2">
                 <Input v-model.number="form.scan_interval_seconds" type="number" min="5" max="3600" />
                 <span class="text-xs text-muted shrink-0">秒</span>
+              </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <label class="text-sm font-medium text-fg">TMDB API 密钥 (选填)</label>
+                <p class="text-xs text-muted mt-0.5">用于获取官方影视海报墙、剧情简介与热播榜单（留空则使用系统预设）</p>
+              </div>
+              <div class="w-full sm:w-64">
+                <Input v-model="form.tmdb_api_key" type="password" placeholder="留空默认使用系统自带密钥" />
               </div>
             </div>
           </template>

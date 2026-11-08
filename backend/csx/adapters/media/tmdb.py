@@ -2,21 +2,21 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import threading
 import time
-import urllib.request
 from collections import OrderedDict
 from typing import Any
 from urllib.parse import quote
+
+import requests
 
 from csx.infra.settings import settings
 
 logger = logging.getLogger(__name__)
 
-TMDB_API_BASE = "https://api.themoviedb.org/3"
+TMDB_API_BASE = os.getenv("CSX_TMDB_API_BASE", "https://api.themoviedb.org/3").rstrip("/")
 TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 TMDB_BACKDROP_BASE = "https://image.tmdb.org/t/p/w1280"
 
@@ -27,12 +27,16 @@ _lock = threading.RLock()
 
 
 def _get_api_key() -> str:
-    # 优先使用配置项，其次使用环境变量，再次读取本机安全凭据文件
     key = os.getenv("CSX_TMDB_API_KEY", "").strip()
+    if not key and hasattr(settings, "tmdb_api_key"):
+        key = str(getattr(settings, "tmdb_api_key", "") or "").strip()
     if not key:
         p = settings.data_dir / "tmdb_api_key.txt"
         if p.is_file():
-            key = p.read_text().strip()
+            try:
+                key = p.read_text().strip()
+            except OSError:
+                key = ""
     if not key and os.path.exists("/app/working/.csx_tmdb_key"):
         try:
             with open("/app/working/.csx_tmdb_key") as fp:
@@ -42,7 +46,7 @@ def _get_api_key() -> str:
     return key
 
 
-def _cached_fetch(url: str) -> Any:
+def _cached_fetch(url: str) -> dict[str, Any]:
     now = time.monotonic()
     with _lock:
         if url in _cache:
@@ -52,21 +56,27 @@ def _cached_fetch(url: str) -> Any:
                 return data
             del _cache[url]
 
-    req = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-            "Accept": "application/json",
-        },
-    )
-    with urllib.request.urlopen(req, timeout=12) as response:
-        payload = json.loads(response.read().decode("utf-8", errors="ignore"))
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+        "Accept": "application/json",
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=12)
+        if resp.status_code == 200:
+            payload = resp.json()
+        else:
+            logger.warning("TMDB 请求返回状态码 %d: %s", resp.status_code, url.split("?")[0])
+            payload = {}
+    except Exception as error:
+        logger.warning("请求 TMDB 失败：%s（%s）", url.split("?")[0], error)
+        payload = {}
 
     with _lock:
-        _cache[url] = (now + CACHE_TTL_SECONDS, payload)
-        _cache.move_to_end(url)
-        while len(_cache) > CACHE_MAX_SIZE:
-            _cache.popitem(last=False)
+        if payload:
+            _cache[url] = (now + CACHE_TTL_SECONDS, payload)
+            _cache.move_to_end(url)
+            while len(_cache) > CACHE_MAX_SIZE:
+                _cache.popitem(last=False)
 
     return payload
 
@@ -80,11 +90,7 @@ def format_tmdb_item(item: dict[str, Any]) -> dict[str, Any]:
         media_type = "tv" if "first_air_date" in item or "name" in item else "movie"
 
     release_date = item.get("release_date") or item.get("first_air_date") or ""
-    year = (
-        int(release_date[:4])
-        if release_date and len(release_date) >= 4 and release_date[:4].isdigit()
-        else None
-    )
+    year = int(release_date[:4]) if release_date and len(release_date) >= 4 and release_date[:4].isdigit() else None
 
     return {
         "id": item.get("id"),
@@ -143,9 +149,7 @@ class TmdbClient:
         query = str(query or "").strip()
         if not key or not query:
             return []
-        url = (
-            f"{TMDB_API_BASE}/search/multi?api_key={key}&language=zh-CN&query={quote(query)}&page=1"
-        )
+        url = f"{TMDB_API_BASE}/search/multi?api_key={key}&language=zh-CN&query={quote(query)}&page=1"
         data = _cached_fetch(url)
         results = data.get("results") or []
         return [
@@ -163,24 +167,22 @@ class TmdbClient:
         url = f"{TMDB_API_BASE}/{m_type}/{tmdb_id}?api_key={key}&language=zh-CN"
         try:
             data = _cached_fetch(url)
+            if not data or not data.get("id"):
+                return None
             res = format_tmdb_item(data)
             if m_type == "tv":
                 seasons = []
                 for s in data.get("seasons") or []:
                     s_num = s.get("season_number", 0)
-                    if s_num > 0:  # 排除特别篇 Season 0
-                        seasons.append(
-                            {
-                                "season_number": s_num,
-                                "name": s.get("name") or f"第 {s_num} 季",
-                                "episode_count": s.get("episode_count", 12),
-                                "poster_url": f"{TMDB_IMAGE_BASE}{s.get('poster_path')}"
-                                if s.get("poster_path")
-                                else None,
-                            }
-                        )
+                    if s_num > 0:
+                        seasons.append({
+                            "season_number": s_num,
+                            "name": s.get("name") or f"第 {s_num} 季",
+                            "episode_count": s.get("episode_count", 12),
+                            "poster_url": f"{TMDB_IMAGE_BASE}{s.get('poster_path')}" if s.get("poster_path") else None,
+                        })
                 res["seasons"] = seasons
             return res
         except Exception as error:
-            logger.warning(f"获取 TMDB {m_type}/{tmdb_id} 详情失败: {error}")
+            logger.warning("解析 TMDB %s/%s 详情失败: %s", m_type, tmdb_id, error)
             return None

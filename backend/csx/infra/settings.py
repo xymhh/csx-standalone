@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     transfer_root: str = "CSX"
     library_root: str = ""
     secret_key: str = ""
+    tmdb_api_key: str = ""
 
     # 鉴权
     admin_user: str = "admin"
