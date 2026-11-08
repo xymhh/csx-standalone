@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import posixpath
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -31,10 +32,50 @@ def _drive_for_request(request: Request, db: Session, provider: str):
     return drive
 
 
+def _drive_for_account(account: Account, request: Request, db: Session):
+    """按指定账号实例化专属适配器，确保多账号互不串号。"""
+    try:
+        from csx.adapters.drive.registry import DriveRegistry
+        from csx.infra.credentials import decrypt_credential
+
+        credential = decrypt_credential(account.credential)
+        return DriveRegistry.build(account.provider, credential)
+    except Exception:
+        return _drive_for_request(request, db, account.provider)
+
+
+def _folder_path(parent_path: str, name: str) -> str:
+    """拼接网盘目录路径，统一成以 / 开头的 posix 形式。"""
+    base = str(parent_path or "").strip()
+    if not base.startswith("/"):
+        base = "/" + base
+    base = base.rstrip("/") or "/"
+    clean = str(name or "").strip().strip("/")
+    return posixpath.join(base, clean) if clean else base
+
+
 class ShareInspectRequest(BaseModel):
     provider: Literal["115", "quark", "auto"] = "auto"
     share_url: str = Field(min_length=1)
     password: str = ""
+
+
+class CreateFolderRequest(BaseModel):
+    parent_id: str = ""
+    parent_path: str = ""
+    name: str = Field(min_length=1, max_length=128)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("文件夹名不能为空")
+        if "/" in normalized or "\\" in normalized:
+            raise ValueError("文件夹名不能包含斜杠")
+        if normalized in {".", ".."}:
+            raise ValueError("文件夹名不合法")
+        return normalized
 
 
 class ShareTransferRequest(BaseModel):
@@ -59,22 +100,14 @@ def list_account_folders(
     account_id: int,
     request: Request,
     parent_id: str = "",
+    parent_path: str = "",
     db: Session = Depends(get_db),
 ):
     account = db.get(Account, account_id)
     if account is None:
         raise HTTPException(404, detail={"code": "ACCOUNT_NOT_FOUND", "message": "账号不存在"})
-    
-    # 针对指定 account_id 实例化专属适配器，确保多账号独立生效
-    try:
-        from csx.adapters.drive.registry import DriveRegistry
-        from csx.infra.credentials import decrypt_credential
 
-        credential = decrypt_credential(account.credential)
-        drive = DriveRegistry.build(account.provider, credential)
-    except Exception:
-        drive = _drive_for_request(request, db, account.provider)
-
+    drive = _drive_for_account(account, request, db)
     if drive is None:
         raise HTTPException(
             404,
@@ -87,16 +120,58 @@ def list_account_folders(
             502,
             detail={"code": "DRIVE_LIST_FAILED", "message": str(error)},
         ) from error
+    base = _folder_path(parent_path, "") if parent_path else ""
     return ok(
         [
             {
                 "id": folder.directory_id,
                 "name": folder.name,
-                "path": folder.path,
+                "path": _folder_path(base, folder.name) if base else folder.path,
                 "has_children": folder.has_children,
             }
             for folder in folders
         ]
+    )
+
+
+@router.post("/{account_id}/folders")
+def create_account_folder(
+    account_id: int,
+    body: CreateFolderRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    account = db.get(Account, account_id)
+    if account is None:
+        raise HTTPException(404, detail={"code": "ACCOUNT_NOT_FOUND", "message": "账号不存在"})
+
+    drive = _drive_for_account(account, request, db)
+    if drive is None:
+        raise HTTPException(
+            404,
+            detail={"code": "ACCOUNT_NOT_CONFIGURED", "message": "网盘账号尚未配置"},
+        )
+    create_directory = getattr(drive, "create_directory", None)
+    if create_directory is None:
+        raise HTTPException(
+            501, detail={"code": "DRIVE_CREATE_UNSUPPORTED", "message": "当前网盘不支持新建文件夹"}
+        )
+    try:
+        created = create_directory(body.parent_id, body.name)
+    except Exception as error:
+        raise HTTPException(
+            502,
+            detail={"code": "DRIVE_CREATE_FOLDER_FAILED", "message": str(error)},
+        ) from error
+    return ok(
+        {
+            "id": created.directory_id,
+            "name": created.name,
+            "path": _folder_path(body.parent_path, created.name)
+            if body.parent_path
+            else created.path,
+            "has_children": created.has_children,
+        }
     )
 
 

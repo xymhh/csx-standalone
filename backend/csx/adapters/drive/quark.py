@@ -146,3 +146,14 @@ class QuarkDriveAdapter:
             has_children = any(child.is_directory for child in self.files._list(item.id))
             result.append(CloudDirectory(item.id, item.name, path, has_children))
         return result
+
+    def create_directory(self, parent_id: str = "", name: str = "") -> CloudDirectory:
+        parent_id = str(parent_id or "0")
+        parent_path = self._directory_paths.get(parent_id, "/")
+        try:
+            created = self.files.create_directory(name, parent_id)
+        except Exception as error:
+            raise RuntimeError(f"新建夸克文件夹失败：{error}") from error
+        path = posixpath.join(parent_path, created.name)
+        self._directory_paths[created.id] = path
+        return CloudDirectory(created.id, created.name, path, False)

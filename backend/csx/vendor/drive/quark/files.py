@@ -224,6 +224,18 @@ class QuarkFileService(CloudDriveFileServiceBase):
     def _is_success(self, response: Any) -> bool:
         return self.client.is_success(response)
 
+    def create_directory(self, name: str, parent_id: str = "0") -> CloudFile:
+        """在指定目录下新建文件夹；同名冲突时返回已存在的同名目录。"""
+        clean = str(name or "").strip()
+        if not clean:
+            raise RuntimeError("文件夹名不能为空")
+        if "/" in clean or "\\" in clean:
+            raise RuntimeError("文件夹名不能包含斜杠")
+        created = self._create_folder(clean, str(parent_id or "0"))
+        if created is None:
+            raise RuntimeError("夸克未返回新建目录信息")
+        return created
+
     def rename_file(self, path: str, item: CloudFile, target_name: str) -> bool:
         response = self.client.request(
             "POST", "file/rename",

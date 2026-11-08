@@ -239,6 +239,34 @@ class P115FileService(OwnerDelegator):
         """只读取目录项；115 目录与文件可能混合排序，不能依赖“目录置顶”提前停止。"""
         return list(self._iter_directory(cid, ensure_file=False))
 
+    def create_directory(self, name: str, parent_id: Any = 0) -> Dict[str, Any]:
+        """在指定目录下新建文件夹；同名已存在时复用已有目录（contain_dir）。"""
+        if not self.client:
+            raise RuntimeError("115 客户端未初始化")
+        if makedir is None:
+            raise RuntimeError("115 目录创建能力不可用")
+        clean = str(name or "").strip()
+        if not clean:
+            raise RuntimeError("文件夹名不能为空")
+        if "/" in clean or "\\" in clean:
+            raise RuntimeError("文件夹名不能包含斜杠")
+        try:
+            directory_id = int(parent_id or 0)
+        except (TypeError, ValueError):
+            directory_id = 0
+        cid = self._rate_limited_call(
+            makedir,
+            self.client,
+            clean,
+            pid=directory_id,
+            contain_dir=True,
+            app="ios",
+            **self._ios_request_kwargs(app=False),
+        )
+        if cid in (None, "", -1):
+            raise RuntimeError("115 未返回新建目录 ID")
+        return {"id": str(cid), "name": clean}
+
     def _rename_items(self, pairs: List[Tuple[Any, str]]) -> Set[str]:
         if not pairs:
             return set()

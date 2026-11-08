@@ -152,7 +152,8 @@ export const subscriptionsApi = {
 }
 export const progressApi = { overview: () => api<ProgressItem[]>('/api/v1/progress'), getDetail: (id: number) => api<ProgressItem>(`/api/v1/progress/${id}`) }
 export const drivesApi = {
-  folders: (accountId: number, parentId = '') => api<DriveFolder[]>(`/api/v1/drives/${accountId}/folders${qs({ parent_id: parentId })}`),
+  folders: (accountId: number, parentId = '', parentPath = '') => api<DriveFolder[]>(`/api/v1/drives/${accountId}/folders${qs({ parent_id: parentId, parent_path: parentPath })}`),
+  createFolder: (accountId: number, body: { parent_id: string; parent_path: string; name: string }) => api<DriveFolder>(`/api/v1/drives/${accountId}/folders`, { method: 'POST', body: JSON.stringify(body) }),
   inspectShare: (body: { provider: '115' | 'quark' | 'auto'; share_url: string; password?: string }) => api<{ provider: string; share_title: string; files: ShareInspectFile[] }>('/api/v1/drives/share/inspect', { method: 'POST', body: JSON.stringify(body) }),
   transferShare: (body: { account_id: number; share_url: string; password?: string; file_ids: string[]; target_dir: string; media_id?: number }) => api<{ task_id: number; state: string }>('/api/v1/drives/share/transfer', { method: 'POST', body: JSON.stringify(body) }),
 }

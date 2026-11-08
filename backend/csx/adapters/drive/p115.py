@@ -171,6 +171,19 @@ class P115DriveAdapter:
             )
         return result
 
+    def create_directory(self, parent_id: str = "", name: str = "") -> CloudDirectory:
+        parent_id = str(parent_id or "0")
+        parent_path = self._directory_paths.get(parent_id, "/")
+        try:
+            created = self.files.manager.create_directory(name, parent_id)
+        except Exception as error:
+            raise RuntimeError(f"新建115文件夹失败：{error}") from error
+        directory_id = str(created.get("id") or "")
+        directory_name = str(created.get("name") or name)
+        path = posixpath.join(parent_path, directory_name)
+        self._directory_paths[directory_id] = path
+        return CloudDirectory(directory_id, directory_name, path, False)
+
     def list_offline_tasks(self) -> list[dict]:
         try:
             from csx.vendor.drive.p115.offline import OfflineDownloadService
