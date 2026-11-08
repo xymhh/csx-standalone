@@ -2,32 +2,39 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* 语义化主题变量：替换旧 tokens.css，页面里禁止再写裸色值 */
+/* 苹果大厂设计规范 (Apple HIG / macOS Sequoia & iOS 18) */
 @theme {
-  --color-bg: #09090b;
-  --color-surface: #18181b;
-  --color-surface-2: #27272a;
-  --color-surface-3: #3f3f46;
-  --color-border: rgb(255 255 255 / 8%);
+  --color-bg: #000000;
+  --color-canvas: #09090b;
+  --color-surface: rgba(24, 24, 27, 0.65);
+  --color-surface-hover: rgba(39, 39, 42, 0.8);
+  --color-surface-active: rgba(63, 63, 70, 0.9);
+  --color-surface-solid: #18181b;
+
+  /* 苹果极细高光内微边框 */
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-hover: rgba(255, 255, 255, 0.16);
+
+  /* 文字体系 */
   --color-fg: #fafafa;
   --color-muted: #a1a1aa;
   --color-subtle: #71717a;
-  --color-primary: #f4f4f5;
-  --color-primary-hover: #e4e4e7;
-  --color-focus: #71717a;
-  --color-input-border: #27272a;
-  --color-input-bg: rgb(24 24 27 / 80%);
-  --color-selection: rgb(244 244 245 / 20%);
 
-  --color-status-waiting: #fbbf24;
-  --color-status-transferred: #38bdf8;
+  /* 核心行动点（纯白反转） */
+  --color-primary: #ffffff;
+  --color-primary-fg: #09090b;
+
+  /* 语义状态色彩（柔和、带呼吸感） */
   --color-status-ready: #34d399;
+  --color-status-waiting: #fbbf24;
   --color-status-missing: #fb7185;
-  --color-status-downloading: #38bdf8;
-  --color-status-failed: #fb7185;
-  --color-status-skipped: #71717a;
+  --color-status-info: #38bdf8;
 
-  --radius-card: 0.75rem;
+  /* 超椭圆大圆角 */
+  --radius-squircle-sm: 0.75rem;
+  --radius-squircle: 1rem;
+  --radius-squircle-lg: 1.5rem;
+  --radius-squircle-xl: 2rem;
 }
 
 @layer base {
@@ -40,29 +47,30 @@
     min-width: 320px;
     background: var(--color-bg);
     color: var(--color-fg);
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    font-feature-settings: "ss01" on;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.015em;
   }
 
-  button {
-    min-height: 44px;
-    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease,
-      transform 160ms ease, box-shadow 160ms ease;
+  /* 苹果弹性轻盈缓动 */
+  button, a {
+    transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   button:active:not(:disabled) {
-    transform: scale(0.98);
+    transform: scale(0.97);
   }
 
   input:not([type="checkbox"]):not([type="radio"]),
   select,
   textarea {
-    border: 1px solid var(--color-input-border);
-    border-radius: 0.625rem;
-    background: var(--color-input-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 0.875rem;
+    background: rgba(24, 24, 27, 0.5);
     color: var(--color-fg);
     outline: none;
+    backdrop-filter: blur(12px);
+    transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   input::placeholder,
@@ -73,44 +81,48 @@
   input:focus-visible,
   select:focus-visible,
   textarea:focus-visible {
-    border-color: var(--color-focus);
-    box-shadow: 0 0 0 1px var(--color-focus);
-  }
-
-  option {
-    background: var(--color-surface);
-    color: var(--color-fg);
-  }
-
-  ::selection {
-    background: var(--color-selection);
-    color: var(--color-fg);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
+    background: rgba(39, 39, 42, 0.7);
   }
 }
 
 @layer components {
-  .surface-card {
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-card);
-    background: var(--color-surface);
-    box-shadow: 0 1px 2px rgb(0 0 0 / 40%);
+  /* 苹果玻璃拟态卡片 (Vibrancy & Material) */
+  .apple-glass {
+    background: rgba(24, 24, 27, 0.55);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
   }
 
-  .page-title {
-    font-size: 1.25rem;
-    font-weight: 650;
-    letter-spacing: -0.025em;
+  .apple-glass-hover {
+    transition: all 240ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .apple-glass-hover:hover {
+    background: rgba(30, 30, 34, 0.7);
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7), inset 0 1px 0 0 rgba(255, 255, 255, 0.18);
+    transform: translateY(-2px);
   }
 
-  .page-description {
-    margin-top: 0.25rem;
-    color: var(--color-muted);
-    font-size: 0.875rem;
+  /* 苹果经典白底黑字反转行动按钮 */
+  .apple-btn-primary {
+    background: #ffffff;
+    color: #09090b;
+    font-weight: 600;
+    border-radius: 9999px;
+    box-shadow: 0 4px 14px rgba(255, 255, 255, 0.15);
+  }
+  .apple-btn-primary:hover {
+    background: #f4f4f5;
+    box-shadow: 0 6px 20px rgba(255, 255, 255, 0.25);
   }
 
-  .tabular-value {
+  /* 等宽数值排版 */
+  .tabular-num {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-variant-numeric: tabular-nums;
-    letter-spacing: -0.04em;
   }
 }

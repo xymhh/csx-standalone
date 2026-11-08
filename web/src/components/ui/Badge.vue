@@ -4,42 +4,45 @@ import { computed } from 'vue'
 import { cn } from '@/lib/utils'
 
 const props = withDefaults(
-  defineProps<{ tone?: 'default' | 'good' | 'warn' | 'bad' | 'info' | 'muted'; pulse?: boolean }>(),
+  defineProps<{
+    tone?: 'default' | 'good' | 'warn' | 'bad' | 'info' | 'muted'
+    pulse?: boolean
+    class?: string
+  }>(),
   { tone: 'default', pulse: false },
 )
 
-const tones = {
-  default: 'border-primary/15 bg-primary/10 text-primary',
-  good: 'border-status-ready/20 bg-status-ready/10 text-status-ready',
-  warn: 'border-status-waiting/20 bg-status-waiting/10 text-status-waiting',
-  bad: 'border-status-missing/20 bg-status-missing/10 text-status-missing',
-  info: 'border-status-transferred/20 bg-status-transferred/10 text-status-transferred',
-  muted: 'border-border bg-surface-2 text-muted',
-} as const
-
-const dots = {
-  default: 'bg-primary',
-  good: 'bg-status-ready',
-  warn: 'bg-status-waiting',
-  bad: 'bg-status-missing',
-  info: 'bg-status-transferred',
-  muted: 'bg-subtle',
-} as const
-
 const classes = computed(() =>
   cn(
-    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium leading-none',
-    tones[props.tone],
+    'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium tracking-tight',
+    'backdrop-blur-md transition-colors border',
+    {
+      'border-white/10 bg-white/5 text-zinc-200': props.tone === 'default',
+      'border-emerald-500/20 bg-emerald-500/10 text-emerald-400': props.tone === 'good',
+      'border-amber-500/20 bg-amber-500/10 text-amber-400': props.tone === 'warn',
+      'border-rose-500/20 bg-rose-500/10 text-rose-400': props.tone === 'bad',
+      'border-sky-500/20 bg-sky-500/10 text-sky-400': props.tone === 'info',
+      'border-white/[0.06] bg-zinc-900/40 text-zinc-400': props.tone === 'muted',
+    },
+    props.class,
   ),
 )
+
+const dotColor = computed(() => ({
+  'bg-zinc-300': props.tone === 'default',
+  'bg-emerald-400': props.tone === 'good',
+  'bg-amber-400': props.tone === 'warn',
+  'bg-rose-400': props.tone === 'bad',
+  'bg-sky-400': props.tone === 'info',
+  'bg-zinc-500': props.tone === 'muted',
+}))
 </script>
 
 <template>
   <span :class="classes">
     <span
-      class="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full"
-      :class="[dots[tone], pulse ? 'shadow-[0_0_8px_currentColor]' : '']"
-      aria-hidden="true"
+      class="h-1.5 w-1.5 shrink-0 rounded-full"
+      :class="[dotColor, pulse && 'animate-pulse shadow-[0_0_6px_currentColor]']"
     />
     <slot />
   </span>

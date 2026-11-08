@@ -1,43 +1,44 @@
 <script setup lang="ts">
-import { cva } from 'class-variance-authority'
 import { computed } from 'vue'
 
 import { cn } from '@/lib/utils'
 
-type Variant = 'default' | 'secondary' | 'outline' | 'ghost' | 'destructive'
-type Size = 'default' | 'sm' | 'lg'
-
-const props = withDefaults(defineProps<{ variant?: Variant; size?: Size }>(), {
-  variant: 'default',
-  size: 'default',
-})
-
-const buttonVariants = cva(
-  'inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-lg text-sm font-medium transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50',
-  {
-    variants: {
-      variant: {
-        default: 'bg-primary text-bg shadow-sm hover:bg-primary-hover active:scale-[0.98]',
-        secondary: 'bg-surface-2 text-fg hover:bg-surface-3',
-        outline: 'border border-border bg-transparent text-fg hover:bg-surface-2',
-        ghost: 'text-muted hover:bg-surface-2 hover:text-fg',
-        destructive: 'bg-status-missing text-primary hover:bg-status-missing/90',
-      },
-      size: {
-        default: 'h-11 px-4',
-        sm: 'h-10 px-3 text-xs',
-        lg: 'h-12 px-6',
-      },
-    },
-    defaultVariants: { variant: 'default', size: 'default' },
-  },
+const props = withDefaults(
+  defineProps<{
+    variant?: 'default' | 'secondary' | 'outline' | 'ghost' | 'danger'
+    size?: 'sm' | 'md' | 'lg'
+    disabled?: boolean
+    class?: string
+    type?: 'button' | 'submit' | 'reset'
+  }>(),
+  { variant: 'default', size: 'md', disabled: false, type: 'button' },
 )
 
-const classes = computed(() => cn(buttonVariants({ variant: props.variant, size: props.size })))
+const classes = computed(() =>
+  cn(
+    'inline-flex items-center justify-center font-medium transition-all duration-200 cursor-pointer select-none',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20',
+    'disabled:pointer-events-none disabled:opacity-40',
+    // 苹果反转胶囊风格
+    {
+      'apple-btn-primary active:scale-[0.97]': props.variant === 'default',
+      'rounded-full bg-zinc-800/90 text-white border border-white/10 hover:bg-zinc-700 active:scale-[0.97] shadow-sm': props.variant === 'secondary',
+      'rounded-full border border-white/10 bg-white/[0.03] text-zinc-200 backdrop-blur-md hover:bg-white/[0.08] hover:border-white/20 active:scale-[0.97]': props.variant === 'outline',
+      'rounded-full text-zinc-400 hover:text-white hover:bg-white/[0.06] active:scale-[0.97]': props.variant === 'ghost',
+      'rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/20 hover:bg-rose-500/25 active:scale-[0.97]': props.variant === 'danger',
+    },
+    {
+      'h-8 px-3 text-xs gap-1.5': props.size === 'sm',
+      'h-10 px-4 text-sm gap-2': props.size === 'md',
+      'h-12 px-6 text-base gap-2.5': props.size === 'lg',
+    },
+    props.class,
+  ),
+)
 </script>
 
 <template>
-  <button :class="classes">
+  <button :type="type" :class="classes" :disabled="disabled">
     <slot />
   </button>
 </template>

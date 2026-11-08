@@ -1,15 +1,27 @@
 <script setup lang="ts">
-defineProps<{ modelValue: string; items: { value: string; label: string }[] }>()
+defineProps<{
+  modelValue: string
+  items: { value: string; label: string }[]
+}>()
+
 defineEmits<{ 'update:modelValue': [value: string] }>()
 </script>
 
 <template>
-  <div class="inline-flex max-w-full gap-1 overflow-x-auto rounded-xl border border-border bg-surface p-1">
+  <!-- 苹果 HIG 经典药丸分段选择器 (Segmented Control) -->
+  <div
+    class="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-full border border-white/[0.08] bg-zinc-900/60 p-1 backdrop-blur-xl shadow-inner scrollbar-none"
+  >
     <button
       v-for="item in items"
       :key="item.value"
-      class="min-h-[40px] shrink-0 rounded-lg px-3 text-sm font-medium transition-colors"
-      :class="modelValue === item.value ? 'bg-surface-3 text-fg shadow-sm' : 'text-muted hover:text-fg'"
+      type="button"
+      class="relative z-10 shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-all duration-200 focus-visible:outline-none"
+      :class="
+        modelValue === item.value
+          ? 'bg-zinc-800 text-white shadow-md shadow-black/40 ring-1 ring-white/10'
+          : 'text-zinc-400 hover:text-zinc-200'
+      "
       @click="$emit('update:modelValue', item.value)"
     >
       {{ item.label }}
