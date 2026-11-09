@@ -7,11 +7,11 @@ from csx.infra.db import SessionLocal
 from csx.infra.models import DiscoveredResource, MediaItem, Subscription, TransferTask
 
 
-def _subscription(title: str) -> int:
+def _subscription(title: str, media_type: str = "tv") -> int:
     with SessionLocal() as db:
         media = MediaItem(
             tmdb_id=int(uuid.uuid4().int % 2_000_000_000) + 1,
-            type="tv",
+            type=media_type,
             title=title,
         )
         db.add(media)
@@ -77,6 +77,28 @@ def test_telegram_ingest_creates_discovered_resource_and_queued_task(client):
     status = client.get("/api/v1/tg/status")
     assert status.status_code == 200
     assert status.json()["data"]["ingested_count"] >= 1
+
+
+def test_telegram_ingest_movie_without_episode_creates_task(client):
+    login(client)
+    subscription_id = _subscription("测试电影", media_type="movie")
+    response = client.post(
+        "/api/v1/tg/ingest",
+        json={
+            "channel": "@test_channel",
+            "message_id": 43,
+            "text": "🎬 测试电影 (2026)\nhttps://115.com/s/movie123?password=abcd",
+            "auto_transfer": True,
+        },
+    )
+    assert response.status_code == 200
+    result = response.json()["data"]
+    assert result["ingested"] is True
+    assert len(result["tasks_created"]) == 1
+    with SessionLocal() as db:
+        resource = db.query(DiscoveredResource).filter_by(subscription_id=subscription_id).one()
+        payload = json.loads(resource.payload)
+        assert payload["season"] == 1 and payload["episode"] == 1
 
 
 def test_telegram_ingest_without_auto_transfer_only_creates_candidate(client):

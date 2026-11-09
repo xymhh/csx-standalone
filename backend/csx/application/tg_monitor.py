@@ -117,15 +117,15 @@ def ingest_telegram_message(
     subscription = session.get(Subscription, subscription_id) if subscription_id else None
     season = int(parsed["season"] or 1)
     episode = parsed["episode"]
-    if subscription is None or episode is None:
+    media = session.get(MediaItem, subscription.media_id) if subscription else None
+    is_movie = media is not None and str(getattr(media, "type", "")).lower() == "movie"
+    if subscription is None or (episode is None and not is_movie):
         return {
             "ingested": False,
             "resources_count": 0,
             "tasks_created": [],
             "message": "未识别到可匹配的缺失剧集订阅或集数",
         }
-
-    media = session.get(MediaItem, subscription.media_id)
     if media is None:
         return {
             "ingested": False,
@@ -133,15 +133,19 @@ def ingest_telegram_message(
             "tasks_created": [],
             "message": "订阅媒体不存在",
         }
-    scope = SubscriptionScope.from_json(subscription.scope)
-    if not scope.accepts(EpisodeKey(season, int(episode))):
+    # 电影没有季集，统一按 S01E01 建任务，转存时取分享内全部视频文件
+    episode = 1 if episode is None else int(episode)
+    scope_skipped = is_movie
+    if not scope_skipped and not SubscriptionScope.from_json(subscription.scope).accepts(
+        EpisodeKey(season, episode)
+    ):
         return {
             "ingested": False,
             "resources_count": 0,
             "tasks_created": [],
             "message": "该集不在订阅范围内",
         }
-    if _episode_is_owned(session, media.id, season, int(episode)):
+    if _episode_is_owned(session, media.id, season, episode):
         return {
             "ingested": False,
             "resources_count": 0,
