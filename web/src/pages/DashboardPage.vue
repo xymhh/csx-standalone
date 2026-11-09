@@ -79,17 +79,28 @@ const showAdvanced = ref(false)
 const adding = ref(false)
 
 async function load() {
-  try {
-    ;[report.value, items.value, tasks.value] = await Promise.all([
-      doctorApi.diagnose(),
-      progressApi.overview(),
-      tasksApi.list(),
-    ])
-  } catch (cause) {
-    console.error(cause)
-  } finally {
-    loading.value = false
+  // 三项互不依赖，任何一个变慢或失败都不应把追剧清单一起拖空
+  const [doctorResult, progressResult, tasksResult] = await Promise.allSettled([
+    doctorApi.diagnose(),
+    progressApi.overview(),
+    tasksApi.list(),
+  ])
+  if (doctorResult.status === 'fulfilled') {
+    report.value = doctorResult.value
+  } else {
+    console.warn('系统自检失败', doctorResult.reason)
   }
+  if (progressResult.status === 'fulfilled') {
+    items.value = progressResult.value
+  } else {
+    toast(progressResult.reason instanceof Error ? progressResult.reason.message : '追剧清单加载失败', 'error')
+  }
+  if (tasksResult.status === 'fulfilled') {
+    tasks.value = tasksResult.value
+  } else {
+    console.warn('转存任务加载失败', tasksResult.reason)
+  }
+  loading.value = false
 }
 
 onMounted(load)

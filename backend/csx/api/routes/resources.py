@@ -6,6 +6,7 @@ import asyncio
 import json
 import shutil
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -955,30 +956,48 @@ def diagnose(request: Request):
     account_checks = []
     try:
         with SessionLocal() as db:
-            for account in db.scalars(select(Account)):
-                drive = getattr(request.app.state, "drives", {}).get(account.provider)
-                if drive is None:
-                    account_checks.append(
-                        {"provider": account.provider, "configured": True, "valid": False}
-                    )
-                    continue
-                try:
-                    drive.list_dir("/")
-                    valid, message = True, ""
-                except Exception as exc:
-                    valid = False
-                    message = str(exc)
-                account_checks.append(
-                    {
-                        "provider": account.provider,
-                        "configured": True,
-                        "valid": valid,
-                        "message": message,
-                        "quota": json.loads(account.quota_state or "{}"),
-                    }
-                )
+            accounts = list(db.scalars(select(Account)))
     except Exception as error:
+        accounts = []
         account_checks = [{"error": str(error)}]
+
+    def _check_account(account: Account) -> dict:
+        drive = getattr(request.app.state, "drives", {}).get(account.provider)
+        if drive is None:
+            return {"provider": account.provider, "configured": True, "valid": False}
+        try:
+            drive.list_dir("/")
+            valid, message = True, ""
+        except Exception as exc:
+            valid = False
+            message = str(exc)
+        return {
+            "provider": account.provider,
+            "configured": True,
+            "valid": valid,
+            "message": message,
+            "quota": json.loads(account.quota_state or "{}"),
+        }
+
+    if accounts:
+        # 网盘接口偶尔会长时间挂起，自检不能被单个账号拖死：并行探测 + 单账号 5s 超时
+        pool = ThreadPoolExecutor(max_workers=min(4, len(accounts)))
+        try:
+            futures = [(account, pool.submit(_check_account, account)) for account in accounts]
+            for account, future in futures:
+                try:
+                    account_checks.append(future.result(timeout=5))
+                except Exception:
+                    account_checks.append(
+                        {
+                            "provider": account.provider,
+                            "configured": True,
+                            "valid": False,
+                            "message": "探测超时，网盘接口无响应",
+                        }
+                    )
+        finally:
+            pool.shutdown(wait=False)
     from csx.adapters.media.tmdb import TmdbClient
 
     return ok(
