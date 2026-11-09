@@ -4,6 +4,10 @@ services:
     image: csx-standalone:dev
     ports:
       - '8000:8000'
+    environment:
+      TZ: Asia/Shanghai
+      CSX_CONFIG_FILE: /config/config.json
     volumes:
-      - ./data:/data
+      - ./config:/config
+      - ./strm:/strm
     restart: unless-stopped

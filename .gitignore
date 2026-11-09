@@ -1,6 +1,8 @@
 # 运行时与敏感
 data/
 config.json
+config/backups/
+config/*.txt
 *.db
 *.db-shm
 *.db-wal

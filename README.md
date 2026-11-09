@@ -21,8 +21,9 @@ uvicorn csx.api.main:app --host 127.0.0.1 --port 8000
 容器部署推荐把配置写进 `config.json`（见下文「配置」一节），只留一个挂载目录：
 
 ```bash
-# config/config.json 里写 data_dir=/config 等配置，再：
+cp config/config.example.json config/config.json   # 改成自己的口令与密钥
 docker compose up -d
+```
 
 # 前端开发服务器，另开终端
 cd web

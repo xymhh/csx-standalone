@@ -1,0 +1,10 @@
+{
+  "data_dir": "/config",
+  "web_dist": "/app/web/dist",
+  "admin_user": "admin",
+  "admin_password": "请改成强口令",
+  "secret_key": "请改成独立的随机长密钥",
+  "tmdb_api_key": "",
+  "cookie_secure": true,
+  "log_level": "INFO"
+}
