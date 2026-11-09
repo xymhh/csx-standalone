@@ -63,3 +63,94 @@ def test_source_endpoints_require_login(client):
     assert client.get("/api/v1/settings/sources/schema").status_code == 401
     assert client.put("/api/v1/settings/sources", json={}).status_code == 401
     assert client.post("/api/v1/settings/sources/test/pansou").status_code == 401
+
+
+def test_source_meta_returns_cached_accounts_and_dynamic_options(client, monkeypatch):
+    login(client)
+    monkeypatch.setattr(
+        SearchSourceAdapter,
+        "dynamic_options",
+        classmethod(
+            lambda cls, scope, key, config: {
+                "status": "ok",
+                "channels": [{"title": "TG", "value": "tg"}],
+                "plugins": [{"title": "pansou", "value": "pansou"}],
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        SearchSourceAdapter,
+        "cached_accounts",
+        classmethod(lambda cls: {"hdhive": {"connected": True, "name": "测试用户"}}),
+    )
+    response = client.get("/api/v1/settings/sources/meta")
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["accounts"]["hdhive"]["name"] == "测试用户"
+    assert data["options"]["pansou"]["channels"][0]["value"] == "tg"
+
+
+def test_source_account_refresh_validates_source_and_returns_card(client, monkeypatch):
+    login(client)
+    assert client.post("/api/v1/settings/sources/account/not-exist").status_code == 404
+    monkeypatch.setattr(
+        SearchSourceAdapter,
+        "account_info",
+        classmethod(
+            lambda cls, source_id, config, refresh=False: {"connected": True, "name": "阿黄"}
+        ),
+    )
+    response = client.post("/api/v1/settings/sources/account/juying")
+    assert response.status_code == 200
+    assert response.json()["data"]["name"] == "阿黄"
+
+
+def test_source_options_refresh_reports_unsupported_and_failures(client, monkeypatch):
+    login(client)
+    assert client.post("/api/v1/settings/sources/options/not-exist/channels").status_code == 404
+    monkeypatch.setattr(
+        SearchSourceAdapter,
+        "dynamic_options",
+        classmethod(lambda cls, scope, key, config: (_ for _ in ()).throw(KeyError(scope))),
+    )
+    assert client.post("/api/v1/settings/sources/options/mikan/channels").status_code == 404
+    monkeypatch.setattr(
+        SearchSourceAdapter,
+        "dynamic_options",
+        classmethod(lambda cls, scope, key, config: (_ for _ in ()).throw(RuntimeError("boom"))),
+    )
+    assert client.post("/api/v1/settings/sources/options/pansou/channels").status_code == 502
+
+
+def test_hdhive_oauth_start_requires_valid_redirect_uri(client):
+    login(client)
+    missing = client.post("/api/v1/settings/sources/hdhive/oauth/start", json={})
+    assert missing.status_code == 422
+    bad_redirect = client.post(
+        "/api/v1/settings/sources/hdhive/oauth/start",
+        json={"client_id": "abc", "redirect_uri": "ftp://x"},
+    )
+    assert bad_redirect.status_code == 422
+    ok_response = client.post(
+        "/api/v1/settings/sources/hdhive/oauth/start",
+        json={"client_id": "abc", "redirect_uri": "https://csx.example/oauth/cb"},
+    )
+    assert ok_response.status_code == 200
+    data = ok_response.json()["data"]
+    assert "client_id=abc" in data["authorize_url"]
+    assert data["state"] and data["expires_in"] == 600
+
+
+def test_hdhive_oauth_exchange_rejects_unknown_state(client):
+    login(client)
+    response = client.post(
+        "/api/v1/settings/sources/hdhive/oauth/exchange",
+        json={
+            "client_id": "abc",
+            "redirect_uri": "https://csx.example/oauth/cb",
+            "app_secret": "secret",
+            "callback": "https://csx.example/oauth/cb?code=c&state=missing",
+        },
+    )
+    assert response.status_code == 422
+    assert "state" in response.json()["error"]["message"]

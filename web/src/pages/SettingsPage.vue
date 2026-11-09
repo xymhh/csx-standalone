@@ -33,6 +33,7 @@ import Button from '@/components/ui/Button.vue'
 import Dialog from '@/components/ui/Dialog.vue'
 import DirectorySelectDialog from '@/components/dialogs/DirectorySelectDialog.vue'
 import AccountCard from '@/components/config/AccountCard.vue'
+import SearchSourceField from '@/components/config/SearchSourceField.vue'
 import Input from '@/components/ui/Input.vue'
 import Select from '@/components/ui/Select.vue'
 import Switch from '@/components/ui/Switch.vue'
@@ -50,13 +51,14 @@ import {
   type NamingVariable,
   type SearchSourceSchema,
   type SearchSourceTest,
+  type SourceMeta,
 } from '@/lib/api'
 
 const navItems = [
   { value: 'accounts', label: '网盘账号' },
   { value: 'drama', label: '追剧与规则' },
   { value: 'charts', label: '榜单自动订阅' },
-  { value: 'sources', label: '搜源站点 (15)' },
+  { value: 'sources', label: '搜索渠道 (15)' },
   { value: 'playback', label: '播放与整理' },
   { value: 'system', label: '通知与高级' },
 ]
@@ -100,6 +102,12 @@ const sourceValues = ref<Record<string, Record<string, any>>>({})
 const selectedSourceId = ref('pansou')
 const sourceTest = ref<SearchSourceTest | null>(null)
 const sourceTestRunning = ref(false)
+const sourceMeta = ref<SourceMeta>({ accounts: {}, options: {} })
+const sourceMetaLoading = ref(false)
+const sourceAccountRefreshing = ref(false)
+const sourceOauthBusy = ref<'' | 'start' | 'exchange'>('')
+const sourceOauthCallback = ref('')
+const pansouMeta = ref<{ channels: { title: string; value: string }[]; plugins: { title: string; value: string }[]; status?: string }>({ channels: [], plugins: [] })
 
 // 表单全量响应式字段
 const f = ref<Record<string, any>>({
@@ -336,6 +344,7 @@ onMounted(() => {
   void loadAccounts()
   void loadAllSettings()
   void loadSources()
+  void loadSourceMeta()
   void loadNaming()
 })
 
@@ -344,7 +353,8 @@ async function saveAll() {
   try {
     if (currentNav.value === 'sources') {
       await searchSourcesApi.save(sourceValues.value)
-      toast('全网 15 搜索源设置已保存', 'success')
+      toast('15 个搜索渠道设置已保存', 'success')
+      void loadSourceMeta()
       return
     }
 
@@ -630,6 +640,133 @@ async function testSelectedSource() {
 }
 
 const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === selectedSourceId.value))
+
+async function loadSourceMeta() {
+  sourceMetaLoading.value = true
+  try {
+    const meta = await searchSourcesApi.meta()
+    sourceMeta.value = meta
+    const pansou = meta.options?.pansou || {}
+    pansouMeta.value = {
+      channels: pansou.channels || [],
+      plugins: pansou.plugins || [],
+      status: pansou.status,
+    }
+  } catch {
+    // 元数据失败不阻塞设置页
+  } finally {
+    sourceMetaLoading.value = false
+  }
+}
+
+function sourceFieldVisible(field: { show?: string }) {
+  const expr = String(field.show || '').trim()
+  if (!expr) return true
+  const match = expr.match(/^config\.([A-Za-z0-9_]+)\s*(?:===\s*['"]([^'"]*)['"])?$/)
+  if (!match) return true
+  const values = sourceValues.value[currentSource.value?.id || '']
+  const value = values?.[match[1]]
+  if (match[2] === undefined) return Boolean(value)
+  return String(value) === match[2]
+}
+
+function sourceFieldCols(field: { cols?: number }) {
+  const cols = Number(field.cols || 12)
+  if (cols <= 3) return 'col-span-12 sm:col-span-3'
+  if (cols === 4) return 'col-span-12 sm:col-span-4'
+  if (cols === 6) return 'col-span-12 sm:col-span-6'
+  if (cols === 8) return 'col-span-12 sm:col-span-8'
+  return 'col-span-12'
+}
+
+function sourceFieldOptions(field: {
+  dynamicOptions?: { scope?: string; key?: string }
+  items?: { title?: string; label?: string; value: string | number }[]
+}) {
+  const dynamic = field.dynamicOptions
+  if (dynamic?.scope === 'pansou') {
+    return dynamic.key === 'plugins' ? pansouMeta.value.plugins : pansouMeta.value.channels
+  }
+  return (field.items || []).map((item) => ({
+    title: String(item.title ?? item.label ?? item.value),
+    value: String(item.value),
+  }))
+}
+
+async function refreshSourceOptions(field: { key?: string; dynamicOptions?: { scope?: string; key?: string } }) {
+  const dynamic = field.dynamicOptions
+  if (!dynamic?.scope || !dynamic.key) return
+  try {
+    const result = await searchSourcesApi.refreshOptions(dynamic.scope, dynamic.key)
+    const items = result.items || []
+    if (dynamic.scope === 'pansou' && dynamic.key === 'plugins') pansouMeta.value.plugins = items
+    else if (dynamic.scope === 'pansou') pansouMeta.value.channels = items
+    toast(`已刷新 ${items.length} 个可选项`, items.length ? 'success' : 'error')
+  } catch (cause) {
+    toast(cause instanceof Error ? cause.message : '刷新选项失败', 'error')
+  }
+}
+
+async function refreshSourceAccount(sourceId: string) {
+  sourceAccountRefreshing.value = true
+  try {
+    const card = await searchSourcesApi.refreshAccount(sourceId)
+    sourceMeta.value.accounts = { ...sourceMeta.value.accounts, [sourceId]: card }
+    if (card.connected) toast(`已读取 ${card.name || '账户'} 信息`, 'success')
+    else toast(card.error || '账户信息读取失败', 'error')
+  } catch (cause) {
+    toast(cause instanceof Error ? cause.message : '账户信息读取失败', 'error')
+  } finally {
+    sourceAccountRefreshing.value = false
+  }
+}
+
+function hdhivePayload() {
+  const values = sourceValues.value.hdhive || {}
+  return {
+    client_id: String(values.hdhive_client_id || '').trim(),
+    redirect_uri: String(values.hdhive_redirect_uri || '').trim(),
+    response_mode: String(values.hdhive_response_mode || 'redirect'),
+    scope: 'query unlock write',
+  }
+}
+
+async function startHdhiveOauth() {
+  sourceOauthBusy.value = 'start'
+  try {
+    const payload = hdhivePayload()
+    const result = await searchSourcesApi.hdhiveOauthStart(payload)
+    sourceOauthCallback.value = ''
+    window.open(result.authorize_url, '_blank', 'noopener')
+    toast('已打开授权页，完成后把回调 URL 粘贴回来', 'success')
+  } catch (cause) {
+    toast(cause instanceof Error ? cause.message : '发起授权失败', 'error')
+  } finally {
+    sourceOauthBusy.value = ''
+  }
+}
+
+async function exchangeHdhiveOauth() {
+  sourceOauthBusy.value = 'exchange'
+  try {
+    const payload = hdhivePayload()
+    const values = sourceValues.value.hdhive || {}
+    const result = await searchSourcesApi.hdhiveOauthExchange({
+      ...payload,
+      app_secret: String(values.hdhive_api_key || '').trim(),
+      callback: sourceOauthCallback.value.trim(),
+    })
+    values.hdhive_access_token = result.access_token
+    values.hdhive_refresh_token = result.refresh_token
+    sourceValues.value.hdhive = { ...values }
+    sourceOauthCallback.value = ''
+    toast(result.warning || 'HDHive 授权成功，Token 已填入，保存后生效', result.warning ? 'error' : 'success')
+  } catch (cause) {
+    toast(cause instanceof Error ? cause.message : '授权校验失败', 'error')
+  } finally {
+    sourceOauthBusy.value = ''
+  }
+}
 </script>
 
 <template>
@@ -638,7 +775,7 @@ const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === se
     <header class="flex items-center justify-between gap-4 border-b border-white/[0.08] pb-4">
       <div>
         <h2 class="text-xl font-bold tracking-tight text-white">系统设置</h2>
-        <p class="text-xs text-zinc-400 mt-0.5">调控自动化追更、网盘转存、搜源站点与播放参数</p>
+        <p class="text-xs text-zinc-400 mt-0.5">调控自动化追更、网盘转存、搜索渠道与播放参数</p>
       </div>
 
       <div class="flex items-center gap-2.5">
@@ -1167,7 +1304,7 @@ const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === se
       </div>
     </div>
 
-    <!-- 4. 搜源站点 (15 源：横向可滚动选项栏) -->
+    <!-- 4. 搜索渠道 (15 源：横向可滚动选项栏) -->
     <div v-else-if="currentNav === 'sources'" class="space-y-4">
       <!-- 核心改变：水平滚动单行选项导航栏 -->
       <div class="apple-glass rounded-2xl p-2.5">
@@ -1217,27 +1354,41 @@ const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === se
 
         <div v-for="(group, gIndex) in currentSource.groups" :key="gIndex" class="apple-glass rounded-2xl p-5 space-y-4">
           <h5 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">{{ group.title || '参数配置' }}</h5>
-          <div class="grid gap-4 sm:grid-cols-2">
-            <div v-for="field in group.fields" :key="field.key" class="space-y-1.5 text-xs">
-              <label class="font-medium text-white flex items-center justify-between">
-                <span>{{ field.label }}</span>
-                <Switch
-                  v-if="field.type === 'switch'"
-                  v-model="sourceValues[currentSource.id][field.key]"
+          <div class="grid grid-cols-12 gap-3">
+            <template v-for="field in group.fields" :key="field.key">
+              <div v-if="sourceFieldVisible(field)" :class="sourceFieldCols(field)" class="space-y-1.5 text-xs">
+                <label v-if="field.label" class="flex items-center gap-1.5 font-medium text-white">
+                  <span>{{ field.label }}</span>
+                  <button
+                    v-if="field.dynamicOptions?.refreshable"
+                    type="button"
+                    class="text-[10px] font-normal text-zinc-500 hover:text-emerald-400 cursor-pointer"
+                    @click="refreshSourceOptions(field)"
+                  >
+                    刷新
+                  </button>
+                </label>
+                <p v-if="field.hint || field.description" class="text-[11px] leading-relaxed text-zinc-500">
+                  {{ field.hint || field.description }}
+                </p>
+                <SearchSourceField
+                  :field="field"
+                  :model-value="sourceValues[currentSource.id][field.key]"
+                  :options="sourceFieldOptions(field)"
+                  :account="sourceMeta.accounts[currentSource.id]"
+                  :busy="sourceTestRunning"
+                  :account-refreshing="sourceAccountRefreshing"
+                  :oauth-busy="sourceOauthBusy"
+                  :oauth-callback="sourceOauthCallback"
+                  @update:model-value="sourceValues[currentSource.id][field.key] = $event"
+                  @update:oauth-callback="sourceOauthCallback = $event"
+                  @test="testSelectedSource()"
+                  @refresh-account="refreshSourceAccount(currentSource.id)"
+                  @oauth-start="startHdhiveOauth()"
+                  @oauth-exchange="exchangeHdhiveOauth()"
                 />
-              </label>
-              <p v-if="field.description" class="text-[11px] text-zinc-500">{{ field.description }}</p>
-              <Input
-                v-if="field.type === 'text' || field.type === 'number'"
-                v-model="sourceValues[currentSource.id][field.key]"
-                :type="field.type === 'number' ? 'number' : 'text'"
-              />
-              <Input
-                v-else-if="field.type === 'password'"
-                v-model="sourceValues[currentSource.id][field.key]"
-                type="password"
-              />
-            </div>
+              </div>
+            </template>
           </div>
         </div>
       </div>

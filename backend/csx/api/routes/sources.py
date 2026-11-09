@@ -35,7 +35,13 @@ def _saved_sources(db: Session) -> dict[str, Any]:
 
 
 def _vendor_config(saved: dict[str, Any]) -> dict[str, Any]:
+    """合并「定义默认值 ← 已保存值」，让测试/选项探测在未保存时也有可用默认。"""
     config: dict[str, Any] = {}
+    for definition in SearchSourceAdapter.definitions():
+        for group in definition.get_config_groups():
+            for spec in group.fields:
+                if spec.key and spec.default not in (None, "", [], {}):
+                    config.setdefault(spec.key, spec.default)
     for source_values in saved.values():
         if isinstance(source_values, dict):
             config.update(source_values)
@@ -82,3 +88,74 @@ def test_source(source_id: str, db: Session = Depends(get_db)):
         )
     result = SearchSourceAdapter.test_source(source_id, _vendor_config(_saved_sources(db)))
     return ok(result)
+
+
+@router.get("/meta")
+def source_meta(db: Session = Depends(get_db)):
+    """渠道账户卡片与动态选项（账户只用缓存，避免拖慢设置页）。"""
+    config = _vendor_config(_saved_sources(db))
+    options: dict[str, Any] = {}
+    try:
+        options["pansou"] = SearchSourceAdapter.dynamic_options("pansou", "", config)
+    except Exception as error:  # 动态选项失败不阻塞页面
+        options["pansou"] = {"status": "unavailable", "error": str(error)}
+    return ok({"accounts": SearchSourceAdapter.cached_accounts(), "options": options})
+
+
+@router.post("/account/{source_id}")
+def refresh_account(source_id: str, db: Session = Depends(get_db)):
+    if source_id not in SearchSourceAdapter.source_ids():
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "SOURCE_NOT_FOUND", "message": "搜索源不存在"},
+        )
+    card = SearchSourceAdapter.account_info(
+        source_id, _vendor_config(_saved_sources(db)), refresh=True
+    )
+    return ok(card)
+
+
+@router.post("/options/{scope}/{key}")
+def refresh_options(scope: str, key: str, db: Session = Depends(get_db)):
+    if scope not in SearchSourceAdapter.source_ids():
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "SOURCE_NOT_FOUND", "message": "搜索源不存在"},
+        )
+    try:
+        result = SearchSourceAdapter.dynamic_options(scope, key, _vendor_config(_saved_sources(db)))
+    except KeyError as error:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "SOURCE_OPTIONS_UNSUPPORTED", "message": "该搜索源没有动态选项"},
+        ) from error
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "SOURCE_OPTIONS_FAILED", "message": f"读取选项失败：{error}"},
+        ) from error
+    return ok(result)
+
+
+@router.post("/hdhive/oauth/start")
+def hdhive_oauth_start(body: dict[str, Any]):
+    try:
+        return ok(SearchSourceAdapter.hdhive_oauth_start(body))
+    except ValueError as error:
+        raise HTTPException(
+            status_code=422, detail={"code": "OAUTH_INVALID", "message": str(error)}
+        ) from error
+
+
+@router.post("/hdhive/oauth/exchange")
+def hdhive_oauth_exchange(body: dict[str, Any]):
+    try:
+        return ok(SearchSourceAdapter.hdhive_oauth_exchange(body))
+    except ValueError as error:
+        raise HTTPException(
+            status_code=422, detail={"code": "OAUTH_INVALID", "message": str(error)}
+        ) from error
+    except Exception as error:
+        raise HTTPException(
+            status_code=502, detail={"code": "OAUTH_FAILED", "message": str(error)}
+        ) from error
