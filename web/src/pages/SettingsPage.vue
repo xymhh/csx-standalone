@@ -1480,7 +1480,7 @@ async function exchangeHdhiveOauth() {
         </div>
         <div
           v-if="sourceMenuOpen"
-          class="absolute left-2 right-2 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-xl border border-white/10 bg-[#141416]/95 p-1.5 shadow-2xl backdrop-blur-xl"
+          class="absolute left-2 right-2 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-xl border border-white/10 bg-[#121214] p-1.5 shadow-2xl"
         >
           <button
             v-for="s in sourceSchemas"
