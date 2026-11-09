@@ -46,12 +46,13 @@ class FakeLibrary:
 
 
 class FakeRepos:
-    def __init__(self):
+    def __init__(self, media_type="tv"):
         self.tasks = FakeTasks()
         self.library = FakeLibrary()
+        self.media_type = media_type
 
     def get_media(self, media_id):
-        return {"title": "Example", "type": "tv", "year": 2024}
+        return {"title": "Example", "type": self.media_type, "year": 2024}
 
 
 class FakeDrive:
@@ -107,8 +108,8 @@ class Settings:
     library_root: str = "Media"
 
 
-def run(drive, *, key="task-key", episode=1):
-    repos = FakeRepos()
+def run(drive, *, key="task-key", episode=1, media_type="tv"):
+    repos = FakeRepos(media_type)
     row = {
         "idempotency_key": key,
         "resource_id": 1,
@@ -131,6 +132,18 @@ def test_transfer_selects_numeric_episode_and_never_grabs_whole_season():
     result, _repos = run(drive, episode=2)
     assert result["ok"]
     assert drive.last_file_ids == ["2"]
+
+
+def test_transfer_movie_picks_all_video_files_and_skips_images():
+    drive = FakeDrive()
+    drive.files = [
+        ShareFile("v1", "Movie.2026.2160p.mkv", 100, ""),
+        ShareFile("v2", "Movie.2026.2160p.sup", 100, ""),
+        ShareFile("v3", "poster.png", 100, ""),
+    ]
+    result, _repos = run(drive, media_type="movie")
+    assert result["ok"]
+    assert drive.last_file_ids == ["v1"]
 
 
 def test_transfer_single_episode_and_sidecar_does_not_add_episode():

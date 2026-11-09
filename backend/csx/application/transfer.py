@@ -55,6 +55,19 @@ def _retry_or_dead_letter(repos, task_id: int, attempt: int, error: str) -> Task
     return state
 
 
+_VIDEO_SUFFIXES = (
+    ".mkv",
+    ".mp4",
+    ".ts",
+    ".m2ts",
+    ".avi",
+    ".rmvb",
+    ".mov",
+    ".wmv",
+    ".iso",
+)
+
+
 def _resource(repos, task_row: dict) -> dict:
     embedded = task_row.get("resource")
     if embedded is not None:
@@ -223,18 +236,34 @@ def execute_transfer(
         except Exception as error:
             state = _retry_or_dead_letter(repos, task_id, current_attempt, str(error))
             return {"ok": False, "task_id": task_id, "state": state.value, "error": str(error)}
+        media_row = (
+            task_row.get("media")
+            or (repos.get_media(media_id) if media_id and hasattr(repos, "get_media") else None)
+            or {}
+        )
+        media_type = str((media_row or {}).get("type") or "").lower()
         selected = []
         unparsed = []
-        for item in share_files:
-            parsed_season, parsed_episode = parse_episode_from_name(item.name)
-            if parsed_episode is None:
-                unparsed.append(item)
-                continue
-            if parsed_episode == episode and (parsed_season is None or parsed_season == season):
-                selected.append(item)
-        # 解析不出集数时只在“整包分享”（仅一个文件）情况下兜底，避免误转存整季
-        if not selected and len(share_files) == 1:
-            selected = unparsed[:1]
+        if media_type == "movie":
+            # 电影没有季集，取分享内全部视频文件，忽略图片与字幕
+            selected = [
+                item
+                for item in share_files
+                if not item.is_dir and item.name.lower().endswith(_VIDEO_SUFFIXES)
+            ]
+            if not selected:
+                selected = share_files[:1]
+        else:
+            for item in share_files:
+                parsed_season, parsed_episode = parse_episode_from_name(item.name)
+                if parsed_episode is None:
+                    unparsed.append(item)
+                    continue
+                if parsed_episode == episode and (parsed_season is None or parsed_season == season):
+                    selected.append(item)
+            # 解析不出集数时只在“整包分享”（仅一个文件）情况下兜底，避免误转存整季
+            if not selected and len(share_files) == 1:
+                selected = unparsed[:1]
         if not selected:
             error = f"分享中未找到 S{season:02d}E{episode:02d} 文件"
             next_state = _retry_or_dead_letter(repos, task_id, current_attempt, error)
