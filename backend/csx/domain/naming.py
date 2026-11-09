@@ -26,6 +26,8 @@ DEFAULT_TV_TEMPLATE = (
 MAX_TEMPLATE_LENGTH = 512
 _EPISODE_PATTERNS = (
     re.compile(r"(?i)S(?P<season>\d{1,3})[ ._-]*E(?:P)?[ ._-]*(?P<episode>\d{1,4})\b"),
+    # 纯数字文件名：中文剧集分享常见 "10.mkv" / "第10集.mkv"
+    re.compile(r"^\s*0*(?P<episode>\d{1,4})\s*\.(?:mkv|mp4|ts|avi|rmvb|flv|mov|wmv)\s*$"),
     re.compile(r"(?i)\bE(?:P)?[ ._-]*(?P<episode>\d{1,4})\b"),
     re.compile(r"(?i)\bEPISODE[ ._-]*(?P<episode>\d{1,4})\b"),
     re.compile(r"第\s*(?P<season>\d{1,3})\s*季\s*第\s*(?P<episode>\d{1,4})\s*集"),

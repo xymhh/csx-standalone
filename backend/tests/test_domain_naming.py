@@ -30,6 +30,9 @@ from csx.domain.naming import build_media_paths, parse_episode_from_name
         ("plain title", (None, None)),
         ("S02E03-04", (2, 3)),
         ("[1080p] Episode 22", (None, 22)),
+        ("10.mkv", (None, 10)),
+        ("第08集.mp4", (None, 8)),
+        ("2026 10.mkv", (None, None)),
     ],
 )
 def test_parse_episode_from_name(text, expected):

@@ -75,6 +75,7 @@ class FakeDrive:
 
     def transfer(self, share_url, target_dir, *, file_ids, password="", rename_map=None):
         self.transfers += 1
+        self.last_file_ids = list(file_ids)
         self.last_target_dir = target_dir
         created = [
             (item.file_id, f"{target_dir}/{item.name}", item.size, item.sha1)
@@ -118,6 +119,18 @@ def run(drive, *, key="task-key", episode=1):
     }
     result = execute_transfer(None, row, drives={"quark": drive}, repos=repos, settings=Settings())
     return result, repos
+
+
+def test_transfer_selects_numeric_episode_and_never_grabs_whole_season():
+    drive = FakeDrive()
+    drive.files = [
+        ShareFile("1", "01.mkv", 100, ""),
+        ShareFile("2", "02.mkv", 100, ""),
+        ShareFile("3", "03.mkv", 100, ""),
+    ]
+    result, _repos = run(drive, episode=2)
+    assert result["ok"]
+    assert drive.last_file_ids == ["2"]
 
 
 def test_transfer_single_episode_and_sidecar_does_not_add_episode():

@@ -224,12 +224,17 @@ def execute_transfer(
             state = _retry_or_dead_letter(repos, task_id, current_attempt, str(error))
             return {"ok": False, "task_id": task_id, "state": state.value, "error": str(error)}
         selected = []
+        unparsed = []
         for item in share_files:
             parsed_season, parsed_episode = parse_episode_from_name(item.name)
-            if parsed_episode is None or (
-                parsed_episode == episode and (parsed_season is None or parsed_season == season)
-            ):
+            if parsed_episode is None:
+                unparsed.append(item)
+                continue
+            if parsed_episode == episode and (parsed_season is None or parsed_season == season):
                 selected.append(item)
+        # 解析不出集数时只在“整包分享”（仅一个文件）情况下兜底，避免误转存整季
+        if not selected and len(share_files) == 1:
+            selected = unparsed[:1]
         if not selected:
             error = f"分享中未找到 S{season:02d}E{episode:02d} 文件"
             next_state = _retry_or_dead_letter(repos, task_id, current_attempt, error)
