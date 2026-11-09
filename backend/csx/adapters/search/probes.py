@@ -225,6 +225,12 @@ def _probe_uindex(config: dict[str, Any]) -> ProbeResult:
         rows = client.search(KEYWORD_EN) or []
         return True, _result_message(len(rows))
     except Exception as error:
+        message = str(error)
+        if "CloakBrowser" in message or "Cloudflare" in message:
+            return False, (
+                "UIndex 需要浏览器通过 Cloudflare 验证，当前环境未授权浏览器引擎；"
+                "填写「搜索代理」后重试，或改用其它渠道"
+            )
         return _error("UIndex 请求失败", error)
 
 
