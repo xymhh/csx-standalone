@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import shutil
 import uuid
@@ -109,6 +110,16 @@ class AccountPatch(BaseModel):
     is_primary: bool | None = None
     transfer_path: str | None = Field(default=None, max_length=256)
     media_path: str | None = Field(default=None, max_length=256)
+
+
+class CandidateIn(BaseModel):
+    subscription_id: int
+    provider: str
+    share_url: str
+    password: str = ""
+    season: int = 1
+    episode: int = 1
+    quality_bucket: str = "1080p"
 
 
 class QrcodeStartRequest(BaseModel):
@@ -328,6 +339,48 @@ def _resource_data(row: DiscoveredResource) -> dict:
         "payload": json.loads(row.payload or "{}"),
         "created_at": row.created_at,
     }
+
+
+@candidates.post("")
+def create_candidate(body: CandidateIn, db: Session = Depends(get_db)):
+    """手动登记一条分享链接，作为候选进入转存流程。"""
+    subscription = db.get(Subscription, body.subscription_id)
+    if subscription is None:
+        _raise(404, "SUBSCRIPTION_NOT_FOUND", "订阅不存在")
+    if body.provider not in {"115", "quark"}:
+        _raise(422, "UNSUPPORTED_PROVIDER", "暂不支持此网盘")
+    share_url = body.share_url.strip()
+    if not share_url.startswith(("http://", "https://")):
+        _raise(422, "SHARE_URL_INVALID", "分享链接格式不正确")
+    digest = hashlib.sha256(
+        f"{body.provider}|{share_url}|{body.season}|{body.episode}".encode()
+    ).hexdigest()
+    dedup = f"manual:{subscription.id}:{digest[:32]}"
+    row = db.scalars(
+        select(DiscoveredResource).where(DiscoveredResource.dedup_key == dedup)
+    ).first()
+    if row is None:
+        row = DiscoveredResource(
+            subscription_id=subscription.id,
+            provider=body.provider,
+            share_url=share_url,
+            dedup_key=dedup,
+            state="new",
+            payload=json.dumps(
+                {
+                    "season": body.season,
+                    "episode": body.episode,
+                    "quality_bucket": body.quality_bucket,
+                    "password": body.password,
+                    "manual": True,
+                },
+                ensure_ascii=False,
+            ),
+        )
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    return ok({"candidate_id": row.id, "state": row.state})
 
 
 @candidates.get("")
