@@ -51,10 +51,18 @@ class ShareService(OwnerDelegator):
 
         try:
             payload = share_extract_payload(url)
-            result = {
-                "share_code": payload.get("share_code", ""),
-                "receive_code": payload.get("receive_code", "")
-            }
+            # p115client 不同版本返回 dict 或 (share_code, receive_code) 元组
+            if isinstance(payload, dict):
+                result = {
+                    "share_code": payload.get("share_code", ""),
+                    "receive_code": payload.get("receive_code", ""),
+                }
+            else:
+                seq = list(payload or [])
+                result = {
+                    "share_code": str(seq[0]) if len(seq) > 0 else "",
+                    "receive_code": str(seq[1]) if len(seq) > 1 else "",
+                }
             self._share_info_cache[url] = result
             return result
         except Exception as e:
@@ -108,10 +116,8 @@ class ShareService(OwnerDelegator):
             status.error_message = "客户端未初始化"
             return status
 
-        # 解析分享链接
-        info = self.extract_share_info(share_url)
-        share_code = info.get("share_code")
-        receive_code = info.get("receive_code")
+        # 解析分享链接（p115client 解析失败时用正则兜底）
+        share_code, receive_code = self.resolve_share_codes(share_url)
 
         if not share_code:
             status.error_message = "无效的分享链接格式"

@@ -55,6 +55,9 @@ class P115DriveAdapter:
         except Exception as error:  # pragma: no cover - 诊断路径
             out["info_error"] = repr(error)
         client = getattr(share, "client", None)
+        from csx.vendor.drive.p115.share import P115_AVAILABLE
+
+        out["p115_available"] = P115_AVAILABLE
         out["client_bool"] = bool(client)
         out["client_type"] = type(client).__name__
         code, rcv = share.resolve_share_codes(url)
