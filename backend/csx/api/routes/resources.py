@@ -938,7 +938,7 @@ def test_account(account_id: int, request: Request, db: Session = Depends(get_db
 
 
 @doctor.get("")
-def diagnose(request: Request):
+def diagnose(request: Request, probe: bool = False):
     db_ok = False
     db_error = ""
     db_size = 0
@@ -966,6 +966,15 @@ def diagnose(request: Request):
         accounts = []
         account_checks = [{"error": str(error)}]
 
+    def _account_snapshot(account: Account) -> dict:
+        return {
+            "provider": account.provider,
+            "configured": True,
+            "valid": None,
+            "message": "",
+            "quota": json.loads(account.quota_state or "{}"),
+        }
+
     def _check_account(account: Account) -> dict:
         drive = getattr(request.app.state, "drives", {}).get(account.provider)
         if drive is None:
@@ -984,20 +993,22 @@ def diagnose(request: Request):
             "quota": json.loads(account.quota_state or "{}"),
         }
 
-    if accounts:
-        # 网盘接口偶尔会长时间挂起，自检不能被单个账号拖死：并行探测 + 单账号 5s 超时
+    if accounts and not probe:
+        # 默认只回配置快照：网盘目录探测在海外节点可达 50s+，不能挂在每次首页自检里
+        account_checks.extend(_account_snapshot(account) for account in accounts)
+    elif accounts:
         pool = ThreadPoolExecutor(max_workers=min(4, len(accounts)))
         try:
             futures = [(account, pool.submit(_check_account, account)) for account in accounts]
             for account, future in futures:
                 try:
-                    account_checks.append(future.result(timeout=5))
+                    account_checks.append(future.result(timeout=60))
                 except Exception:
                     account_checks.append(
                         {
                             "provider": account.provider,
                             "configured": True,
-                            "valid": False,
+                            "valid": None,
                             "message": "探测超时，网盘接口无响应",
                         }
                     )
