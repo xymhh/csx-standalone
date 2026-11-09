@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, type Component } from 'vue'
+import { computed, onMounted, ref, watch, type Component } from 'vue'
 import {
   Bell,
   Check,
@@ -264,6 +264,7 @@ async function loadSources() {
     if (!selectedSourceId.value || !schemas.some((s) => s.id === selectedSourceId.value)) {
       selectedSourceId.value = schemas[0]?.id ?? 'pansou'
     }
+    void ensureSourceAccount(selectedSourceId.value)
   } catch {}
 }
 
@@ -815,6 +816,32 @@ async function refreshSourceOptions(field: { key?: string; dynamicOptions?: { sc
     toast(cause instanceof Error ? cause.message : '刷新选项失败', 'error')
   }
 }
+
+const sourceAccountPending = ref<Set<string>>(new Set())
+
+// 进入某个渠道时静默拉一次账户信息，卡片才能一进页面就显示
+async function ensureSourceAccount(sourceId: string) {
+  if (!sourceId) return
+  if (sourceMeta.value.accounts[sourceId]) return
+  if (sourceAccountPending.value.has(sourceId)) return
+  const pending = new Set(sourceAccountPending.value)
+  pending.add(sourceId)
+  sourceAccountPending.value = pending
+  try {
+    const card = await searchSourcesApi.refreshAccount(sourceId)
+    sourceMeta.value.accounts = { ...sourceMeta.value.accounts, [sourceId]: card }
+  } catch {
+    // 静默失败：卡片位置会提示未连接，不打扰用户
+  } finally {
+    const next = new Set(sourceAccountPending.value)
+    next.delete(sourceId)
+    sourceAccountPending.value = next
+  }
+}
+
+watch([selectedSourceId, currentNav], () => {
+  if (currentNav.value === 'sources') void ensureSourceAccount(selectedSourceId.value)
+})
 
 async function refreshSourceAccount(sourceId: string) {
   sourceAccountRefreshing.value = true
