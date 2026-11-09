@@ -97,9 +97,7 @@ def render_template(template: str, payload: dict[str, Any]) -> str:
         return ""
 
 
-def render_event(
-    templates: Any, event: str, payload: dict[str, Any]
-) -> str:
+def render_event(templates: Any, event: str, payload: dict[str, Any]) -> str:
     """渲染某事件的通知文本；模板异常时回退默认模板，仍失败则回退摘要。"""
     resolved = normalize_templates(templates)
     text = render_template(resolved.get(event, ""), payload)
@@ -110,6 +108,8 @@ def render_event(
         return fallback
     lines = [event]
     lines.extend(
-        f"{key}: {value}" for key, value in payload.items() if key != "text" and value not in (None, "")
+        f"{key}: {value}"
+        for key, value in payload.items()
+        if key != "text" and value not in (None, "")
     )
     return "\n".join(lines)

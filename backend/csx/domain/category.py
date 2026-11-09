@@ -44,8 +44,7 @@ def default_strategies(media_type: str) -> list[dict[str, Any]]:
         else DEFAULT_MOVIE_STRATEGIES
     )
     return [
-        {"name": item["name"], "conditions": dict(item.get("conditions") or {})}
-        for item in source
+        {"name": item["name"], "conditions": dict(item.get("conditions") or {})} for item in source
     ]
 
 

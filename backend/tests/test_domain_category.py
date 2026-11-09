@@ -66,7 +66,9 @@ def test_year_range_condition():
 
 
 def test_multi_value_is_or_and_conditions_are_and():
-    strategies = [{"name": "国产动画", "conditions": {"genre_ids": "16,99", "origin_country": "CN"}}]
+    strategies = [
+        {"name": "国产动画", "conditions": {"genre_ids": "16,99", "origin_country": "CN"}}
+    ]
     assert match_category(strategies, {"genre_ids": [99], "origin_country": ["CN"]}) == "国产动画"
     assert match_category(strategies, {"genre_ids": [99], "origin_country": ["US"]}) == ""
 

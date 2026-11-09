@@ -107,7 +107,9 @@ def test_category_inserts_second_level_directory_for_tv():
         type_folder=True,
     )
 
-    assert path == "/CSX/媒体库/电视剧/国漫/Example (2024)/Season 01/Example (2024) S01E01 [REMUX].mkv"
+    assert (
+        path == "/CSX/媒体库/电视剧/国漫/Example (2024)/Season 01/Example (2024) S01E01 [REMUX].mkv"
+    )
     assert drive.moves[0] == ("f1", "/CSX/媒体库/电视剧/国漫/Example (2024)/Season 01")
 
 

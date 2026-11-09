@@ -27,9 +27,7 @@ def media_type_dir(media_type: str | None, *, type_movie: str, type_tv: str) -> 
     return type_movie if is_movie(media_type) else type_tv
 
 
-def resolve_category(
-    media: dict, strategies_by_type: dict | None
-) -> str:
+def resolve_category(media: dict, strategies_by_type: dict | None) -> str:
     """按二级分类策略算出分类目录名；拿不到元数据时返回空串（不建目录）。"""
     if not strategies_by_type:
         return ""
