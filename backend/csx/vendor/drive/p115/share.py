@@ -111,7 +111,7 @@ class ShareService(OwnerDelegator):
                 "share_code": share_code,
                 "receive_code": receive_code or "",
                 "cid": 0,
-                "limit": 1,  # 只获取1条记录，用于验证
+                "limit": 20,  # 顺带带回前 20 条，便于诊断列文件失败
                 "offset": 0,
             }
             resp = self._rate_limited_call(
@@ -135,6 +135,14 @@ class ShareService(OwnerDelegator):
 
                 status.file_count = int(data.get("count", len(file_list)))
                 status.share_info = {
+                    "preview": [
+                        {
+                            "name": str(item.get("n") or item.get("name") or ""),
+                            "is_dir": bool(item.get("d") or item.get("is_dir")),
+                            "size": int(item.get("s") or item.get("size") or 0),
+                        }
+                        for item in file_list[:20]
+                    ],
                     "share_title": share_info.get("share_title", ""),
                     "share_state": share_info.get("share_state", ""),
                     "file_count": status.file_count,

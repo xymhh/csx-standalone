@@ -207,6 +207,7 @@ def inspect_share(body: ShareInspectRequest, request: Request, db: Session = Dep
                 {
                     "provider": provider,
                     "share_title": status.share_title or (files[0].name if files else "分享文件"),
+                    "preview": status.preview,
                     "files": [
                         {
                             "id": item.file_id,

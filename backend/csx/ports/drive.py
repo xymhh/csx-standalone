@@ -13,6 +13,7 @@ class ShareStatus:
     error: str = ""
     password_required: bool = False
     share_title: str = ""
+    preview: list = field(default_factory=list)
 
 
 @dataclass(frozen=True)

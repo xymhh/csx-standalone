@@ -32,11 +32,13 @@ class P115DriveAdapter:
     def check_share(self, share_url: str, password: str = "") -> ShareStatus:
         status = self.share.check_share_status(self._share_url(share_url, password))
         error = str(getattr(status, "error_message", "") or "")
+        info = getattr(status, "share_info", {}) or {}
         return ShareStatus(
             bool(getattr(status, "is_valid", False)),
             error,
             "提取码" in error or "密码" in error,
-            str((getattr(status, "share_info", {}) or {}).get("share_title") or ""),
+            str(info.get("share_title") or ""),
+            list(info.get("preview") or []),
         )
 
     def list_share_files(self, share_url: str, password: str = "") -> list[ShareFile]:
