@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from p4_helpers import login
 
 from csx.infra.db import SessionLocal
-from csx.infra.models import Episode, LibraryFile, MediaItem, Season
+from csx.infra.models import Episode, LibraryFile, MediaItem, Season, Subscription
 
 
 def test_progress_overview_and_single_media_matrix(client):
@@ -24,6 +24,7 @@ def test_progress_overview_and_single_media_matrix(client):
         db.add_all([first, second])
         db.flush()
         db.add(LibraryFile(episode_id=first.id, path="/library/episode-1.mkv", size=1024))
+        db.add(Subscription(media_id=media.id, state="active"))
         db.commit()
         media_id = media.id
 

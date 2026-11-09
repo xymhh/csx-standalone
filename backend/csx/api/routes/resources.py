@@ -537,8 +537,13 @@ def _preferred_subscriptions(db: Session, media_id: int | None = None) -> dict[i
 def progress_overview(db: Session = Depends(get_db)):
     media_rows = db.scalars(select(MediaItem).order_by(MediaItem.id)).all()
     subscriptions_by_media = _preferred_subscriptions(db)
+    # 「我的追剧」只展示仍有追更订阅的影视：删除订阅后卡片应随之消失
     return ok(
-        [_media_progress(db, media, subscriptions_by_media.get(media.id)) for media in media_rows]
+        [
+            _media_progress(db, media, subscriptions_by_media[media.id])
+            for media in media_rows
+            if media.id in subscriptions_by_media
+        ]
     )
 
 

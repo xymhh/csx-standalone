@@ -51,21 +51,27 @@ def test_progress_prefers_active_over_paused_regardless_of_order(client):
     assert second["subscription_state"] == "active"
 
 
-def test_progress_ignores_deleted_subscription(client):
+def test_progress_hides_media_after_subscription_deleted(client):
     login(client)
     media_id = media_row()
     subscription_id = _add_subscription(media_id, "active")
+    assert _progress_item(client, media_id)["subscription_id"] == subscription_id
+
     assert client.delete(f"/api/v1/subscriptions/{subscription_id}").status_code == 200
 
-    item = _progress_item(client, media_id)
-    assert item["subscription_id"] is None
-    assert item["subscription_state"] is None
+    overview = client.get("/api/v1/progress").json()["data"]
+    assert all(item["media_id"] != media_id for item in overview)
+    single = client.get(f"/api/v1/progress/{media_id}").json()["data"]
+    assert single["subscription_id"] is None
+    assert single["subscription_state"] is None
 
 
-def test_progress_without_subscription_returns_null(client):
+def test_progress_hides_media_without_subscription(client):
     login(client)
     media_id = media_row()
 
-    item = _progress_item(client, media_id)
-    assert item["subscription_id"] is None
-    assert item["subscription_state"] is None
+    overview = client.get("/api/v1/progress").json()["data"]
+    assert all(item["media_id"] != media_id for item in overview)
+    single = client.get(f"/api/v1/progress/{media_id}").json()["data"]
+    assert single["subscription_id"] is None
+    assert single["subscription_state"] is None
