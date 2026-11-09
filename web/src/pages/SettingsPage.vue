@@ -1622,6 +1622,7 @@ async function exchangeHdhiveOauth() {
                 <button type="button" class="px-0.5 text-zinc-500 hover:text-white disabled:opacity-30 cursor-pointer" :disabled="index === sourceOrder.length - 1" @click="moveOrderItem('source', id, 1)">›</button>
                 <button type="button" class="px-0.5 text-zinc-500 hover:text-rose-400 cursor-pointer" @click="removeOrderItem('source', id)">✕</button>
               </span>
+              <p v-if="!sourceOrder.length" class="text-[11px] text-zinc-500">未设置优先级，按渠道注册顺序搜索</p>
               <div class="relative">
                 <button
                   type="button"
