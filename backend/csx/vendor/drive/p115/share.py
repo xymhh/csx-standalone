@@ -308,7 +308,6 @@ class ShareService(OwnerDelegator):
                 cid=int(parent_id or 0),
                 app="web",
                 cooldown=self.rate_limiter.min_interval,
-                max_workers=0,
             ))
         )
         return [
@@ -348,7 +347,6 @@ class ShareService(OwnerDelegator):
                     cid=cid,
                     app="web",
                     cooldown=self.rate_limiter.min_interval,
-                    max_workers=0,
                 ))
             )
 
