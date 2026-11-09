@@ -5,6 +5,7 @@ from __future__ import annotations
 import posixpath
 import threading
 import time
+import traceback
 from contextlib import contextmanager
 from datetime import date
 
@@ -66,6 +67,16 @@ _VIDEO_SUFFIXES = (
     ".wmv",
     ".iso",
 )
+
+
+def _fmt_error(error: BaseException) -> str:
+    """把异常连同最内层堆栈位置写进任务错误，便于线上定位。"""
+    tail = traceback.format_exc().strip().splitlines()
+    where = next(
+        (line.strip() for line in reversed(tail) if line.strip().startswith(("File ", "  "))), ""
+    )
+    message = f"{type(error).__name__}: {error}"
+    return f"{message} @ {where}" if where else message
 
 
 def _resource(repos, task_row: dict) -> dict:
@@ -221,8 +232,9 @@ def execute_transfer(
         try:
             status = drive.check_share(share_url, str(resource.get("password", "")))
         except Exception as error:
-            state = _retry_or_dead_letter(repos, task_id, current_attempt, str(error))
-            return {"ok": False, "task_id": task_id, "state": state.value, "error": str(error)}
+            detail = _fmt_error(error)
+            state = _retry_or_dead_letter(repos, task_id, current_attempt, detail)
+            return {"ok": False, "task_id": task_id, "state": state.value, "error": detail}
         if not status.valid:
             error = status.error or "分享失效"
             dst = TaskState.RETRY_WAIT if status.password_required else TaskState.DEAD_LETTER
@@ -234,8 +246,9 @@ def execute_transfer(
         try:
             share_files = drive.list_share_files(share_url, str(resource.get("password", "")))
         except Exception as error:
-            state = _retry_or_dead_letter(repos, task_id, current_attempt, str(error))
-            return {"ok": False, "task_id": task_id, "state": state.value, "error": str(error)}
+            detail = _fmt_error(error)
+            state = _retry_or_dead_letter(repos, task_id, current_attempt, detail)
+            return {"ok": False, "task_id": task_id, "state": state.value, "error": detail}
         media_row = (
             task_row.get("media")
             or (repos.get_media(media_id) if media_id and hasattr(repos, "get_media") else None)
@@ -279,8 +292,9 @@ def execute_transfer(
                 password=str(resource.get("password", "")),
             )
         except Exception as error:
-            state = _retry_or_dead_letter(repos, task_id, current_attempt, str(error))
-            return {"ok": False, "task_id": task_id, "state": state.value, "error": str(error)}
+            detail = _fmt_error(error)
+            state = _retry_or_dead_letter(repos, task_id, current_attempt, detail)
+            return {"ok": False, "task_id": task_id, "state": state.value, "error": detail}
         if not outcome.created:
             error = outcome.error or "转存未生成文件"
             next_state = _retry_or_dead_letter(repos, task_id, current_attempt, error)

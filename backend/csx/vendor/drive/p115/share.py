@@ -348,6 +348,7 @@ class ShareService(OwnerDelegator):
         offset = 0
         while True:
             rows, count = self._snap_list(share_code, receive_code, cid, offset)
+            rows = [row for row in rows if isinstance(row, dict)]
             self.last_snap_debug = f"cid={cid} count={count} rows={len(rows)}"
             for item in rows:
                 name = str(item.get("n") or item.get("name") or item.get("file_name") or "")
@@ -473,8 +474,8 @@ class ShareService(OwnerDelegator):
         files = []
         self.last_list_error = ""
         try:
-            rows = self.rate_limiter.call(
-                lambda: list(share_iterdir(
+            raw = self.rate_limiter.call(
+                lambda: share_iterdir(
                     self.client,
                     share_code=share_code,
                     receive_code=receive_code,
@@ -483,8 +484,14 @@ class ShareService(OwnerDelegator):
                     app="web",
                     headers={"user-agent": IOS_SHARE_USER_AGENT},
                     cooldown=self.rate_limiter.min_interval,
-                ))
+                )
             )
+            if isinstance(raw, str):
+                # 115 风控时会返回纯文本而非列表，直接 list() 会把字符当条目
+                self.last_list_error = f"share_iterdir 返回文本：{raw[:200]}"
+                logger.error(f"{log_prefix} {self.last_list_error}".strip())
+                raw = []
+            rows = [row for row in list(raw or []) if isinstance(row, dict)]
 
             for item in rows:
                 file_info = {

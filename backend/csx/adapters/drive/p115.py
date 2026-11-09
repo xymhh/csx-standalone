@@ -92,7 +92,8 @@ class P115DriveAdapter:
         return out
 
     def list_share_files(self, share_url: str, password: str = "") -> list[ShareFile]:
-        items = self.share.list_share_files(self._share_url(share_url, password))
+        raw_items = self.share.list_share_files(self._share_url(share_url, password))
+        items = [item for item in (raw_items or []) if isinstance(item, dict)]
         error = str(getattr(self.share, "last_list_error", "") or "")
         if not items and error:
             raise RuntimeError(f"列出分享文件失败：{error}")
