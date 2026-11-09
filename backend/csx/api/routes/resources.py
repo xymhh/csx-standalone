@@ -520,13 +520,30 @@ def retry_batch(task_ids: list[int], db: Session = Depends(get_db)):
     return ok({"retried": updated})
 
 
+def _preferred_subscriptions(db: Session, media_id: int | None = None) -> dict[int, Subscription]:
+    query = select(Subscription).where(Subscription.state != "deleted")
+    if media_id is not None:
+        query = query.where(Subscription.media_id == media_id)
+    mapping: dict[int, Subscription] = {}
+    for row in db.scalars(query.order_by(Subscription.id)).all():
+        current = mapping.get(row.media_id)
+        if current is None or (current.state != "active" and row.state == "active"):
+            mapping[row.media_id] = row
+    return mapping
+
+
 @progress.get("")
 def progress_overview(db: Session = Depends(get_db)):
     media_rows = db.scalars(select(MediaItem).order_by(MediaItem.id)).all()
-    return ok([_media_progress(db, media) for media in media_rows])
+    subscriptions_by_media = _preferred_subscriptions(db)
+    return ok(
+        [_media_progress(db, media, subscriptions_by_media.get(media.id)) for media in media_rows]
+    )
 
 
-def _media_progress(db: Session, media: MediaItem) -> dict:
+def _media_progress(
+    db: Session, media: MediaItem, subscription: Subscription | None = None
+) -> dict:
     seasons = db.scalars(select(Season).where(Season.media_id == media.id)).all()
     aired = 0
     owned = 0
@@ -575,6 +592,8 @@ def _media_progress(db: Session, media: MediaItem) -> dict:
         "overview": media.overview,
         "poster_url": media.poster_url,
         "rating": getattr(media, "rating", None),
+        "subscription_id": subscription.id if subscription else None,
+        "subscription_state": subscription.state if subscription else None,
         "aired_count": aired,
         "owned_count": owned,
         "missing": missing,
@@ -587,7 +606,8 @@ def media_progress(media_id: int, db: Session = Depends(get_db)):
     media = db.get(MediaItem, media_id)
     if media is None:
         _raise(404, "MEDIA_NOT_FOUND", "媒体不存在")
-    return ok(_media_progress(db, media))
+    subscription = _preferred_subscriptions(db, media_id).get(media_id)
+    return ok(_media_progress(db, media, subscription))
 
 
 @library.get("/files")

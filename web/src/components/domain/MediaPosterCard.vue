@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, useSlots } from 'vue'
 import { Film } from '@lucide/vue'
 
 import Badge from '@/components/ui/Badge.vue'
@@ -8,6 +8,7 @@ import type { ProgressItem } from '@/lib/api'
 
 const props = defineProps<{ media: ProgressItem }>()
 defineEmits<{ select: [mediaId: number] }>()
+const slots = useSlots()
 
 const gradient = computed(() => {
   const gradients = [
@@ -24,6 +25,8 @@ const gradient = computed(() => {
   }
   return gradients[sum % gradients.length]
 })
+
+const paused = computed(() => props.media.subscription_state === 'paused')
 
 const percent = computed(() => {
   if (!props.media.aired_count) return 0
@@ -45,6 +48,7 @@ const percent = computed(() => {
         :alt="media.title"
         loading="lazy"
         class="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+        :class="paused ? 'grayscale' : ''"
       />
 
       <!-- 无海报时的微质感电影暗夜渐变 -->
@@ -58,14 +62,25 @@ const percent = computed(() => {
         </div>
       </div>
 
+      <!-- 暂停态灰度遮罩 -->
+      <div v-if="paused" class="pointer-events-none absolute inset-0 bg-black/40" />
+
       <!-- 顶部半透明轻盈胶囊 -->
-      <div class="absolute inset-x-2.5 top-2.5 flex items-center justify-between pointer-events-none">
-        <span class="rounded-full bg-black/60 px-2.5 py-0.5 text-[10px] font-medium text-zinc-200 backdrop-blur-xl border border-white/10 shadow-sm">
-          {{ media.seasons.length > 1 ? `共 ${media.seasons.length} 季` : '第 1 季' }}
+      <div class="absolute inset-x-2.5 top-2.5 flex items-center justify-between pointer-events-none" :class="slots.actions ? 'pr-9' : ''">
+        <span
+          class="rounded-full px-2.5 py-0.5 text-[10px] font-medium backdrop-blur-xl border shadow-sm"
+          :class="paused ? 'border-amber-500/30 bg-amber-500/15 text-amber-300' : 'border-white/10 bg-black/60 text-zinc-200'"
+        >
+          {{ paused ? '已暂停' : media.seasons.length > 1 ? `共 ${media.seasons.length} 季` : '第 1 季' }}
         </span>
         <Badge :tone="media.missing.length ? 'warn' : 'good'">
           {{ media.missing.length ? `缺 ${media.missing.length} 集` : '已齐' }}
         </Badge>
+      </div>
+
+      <!-- 调用方操作入口（绝对定位右上角） -->
+      <div class="absolute right-2.5 top-2.5 z-20">
+        <slot name="actions" />
       </div>
 
       <!-- 底部暗影自然过渡蒙版与标题 -->

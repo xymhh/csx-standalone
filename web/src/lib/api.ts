@@ -65,7 +65,7 @@ export interface Candidate { id: number; subscription_id: number; provider: stri
 export interface Task { id: number; subscription_id: number; resource_id: number; idempotency_key: string; state: string; attempt: number; next_retry_at: string | null; last_error: string | null; created_at: string; updated_at: string }
 export interface ProgressEpisode { episode: number; title: string | null; air_date: string | null; aired: boolean; owned: boolean; file: { file_id: number; path: string; size: number; sha1: string | null; quality_bucket: string; created_at: string } | null }
 export interface ProgressSeason { season: number; episodes: ProgressEpisode[] }
-export interface ProgressItem { media_id: number; title: string; type?: string; year?: number | null; overview?: string; poster_url?: string; rating?: number | null; aired_count: number; owned_count: number; missing: { season: number; episode: number }[]; seasons: ProgressSeason[] }
+export interface ProgressItem { media_id: number; title: string; type?: string; year?: number | null; overview?: string; poster_url?: string; rating?: number | null; subscription_id?: number | null; subscription_state?: string | null; aired_count: number; owned_count: number; missing: { season: number; episode: number }[]; seasons: ProgressSeason[] }
 export interface DriveFolder { id: string; name: string; path: string; has_children: boolean }
 export interface ShareInspectFile { id: string; name: string; size: number; is_dir: boolean }
 export interface LibraryFile { id: number; media_id: number; path: string; size: number; sha1: string; quality_bucket: string; provider?: string; created_at: string }

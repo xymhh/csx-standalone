@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { Compass, Film, Star, Plus, Check } from '@lucide/vue'
+import { Compass, Film, Star, Plus, Check, Search } from '@lucide/vue'
 
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
 import Dialog from '@/components/ui/Dialog.vue'
+import Input from '@/components/ui/Input.vue'
 import Tabs from '@/components/ui/Tabs.vue'
 import { useToast } from '@/composables/useToast'
 import { posterSrc } from '@/lib/poster'
@@ -27,6 +28,11 @@ const typeFilter = ref<'all' | 'movie' | 'tv'>('all')
 const yearFilter = ref<'all' | 'this' | 'recent'>('all')
 const ratingFilter = ref<'all' | '7' | '8' | '9'>('all')
 const currentYear = new Date().getFullYear()
+
+const keyword = ref('')
+const searchKeyword = ref('')
+const searching = ref(false)
+const searchMode = computed(() => searchKeyword.value.length > 0)
 
 const filteredItems = computed(() => {
   return items.value.filter((item) => {
@@ -89,12 +95,46 @@ onMounted(() => {
 })
 
 watch(activeTab, () => {
-  void fetchItems()
+  if (!searchMode.value) void fetchItems()
 })
+
+async function runSearch() {
+  const query = keyword.value.trim()
+  if (!query) return
+  searchKeyword.value = query
+  searching.value = true
+  loading.value = true
+  items.value = []
+  try {
+    items.value = await tmdbApi.search(query)
+  } catch (cause) {
+    toast(cause instanceof Error ? cause.message : '搜索失败，请稍后重试', 'error')
+  } finally {
+    searching.value = false
+    loading.value = false
+  }
+}
+
+function exitSearch() {
+  searchKeyword.value = ''
+  keyword.value = ''
+  void fetchItems()
+}
 
 function openDetail(item: TmdbItem) {
   selected.value = item
   detailOpen.value = true
+}
+
+async function episodeCountFor(target: TmdbItem) {
+  if (target.type !== 'tv') return 1
+  try {
+    const detail = await tmdbApi.detail('tv', target.id)
+    const count = detail.seasons?.[0]?.episode_count
+    return count && count > 0 ? count : 1
+  } catch {
+    return 1
+  }
 }
 
 async function subscribeItem() {
@@ -115,13 +155,14 @@ async function subscribeItem() {
       tmdbId = first.id
     }
 
+    const episodeCount = await episodeCountFor(target)
     await subscriptionsApi.create({
       title: target.title,
       media_type: target.type,
       year: target.year || undefined,
       tmdb_id: tmdbId,
       season_number: 1,
-      episode_count: 24,
+      episode_count: episodeCount,
     })
     subscribedIds.value.add(tmdbId)
     toast(`已添加《${target.title}》！系统已开始全网找源转存`, 'success')
@@ -146,8 +187,32 @@ async function subscribeItem() {
       </div>
     </div>
 
-    <!-- 顶部清晰选项卡 -->
-    <Tabs v-model="activeTab" :items="tabs" />
+    <!-- 搜索框 -->
+    <form class="flex items-center gap-2" @submit.prevent="runSearch">
+      <Input
+        v-model="keyword"
+        class="flex-1"
+        placeholder="搜索影视名称，回车或点击右侧放大镜"
+        autocomplete="off"
+      />
+      <Button type="submit" class="gap-1.5" :disabled="searching || !keyword.trim()">
+        <Search class="h-4 w-4" />
+        <span>{{ searching ? '搜索中…' : '搜索' }}</span>
+      </Button>
+    </form>
+
+    <!-- 顶部清晰选项卡 / 搜索态提示 -->
+    <Tabs v-if="!searchMode" v-model="activeTab" :items="tabs" />
+    <div
+      v-else
+      class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/60 bg-surface/60 px-4 py-3"
+    >
+      <p class="text-xs text-muted">
+        正在展示“<span class="font-medium text-fg">{{ searchKeyword }}</span>”的搜索结果 · 共
+        <span class="font-mono text-fg">{{ filteredItems.length }}</span> 条
+      </p>
+      <Button variant="outline" size="sm" @click="exitSearch">返回榜单</Button>
+    </div>
 
     <!-- 筛选条 -->
     <div
@@ -198,6 +263,19 @@ async function subscribeItem() {
         :key="i"
         class="aspect-[2/3] rounded-2xl border border-border/40 bg-surface-2/30 animate-pulse"
       />
+    </div>
+
+    <!-- 搜索无结果 -->
+    <div
+      v-else-if="searchMode && !items.length"
+      class="rounded-2xl border border-dashed border-border/80 bg-surface/30 p-16 text-center space-y-3"
+    >
+      <Compass class="mx-auto h-10 w-10 text-subtle/50" />
+      <h3 class="text-base font-semibold text-fg">没有找到相关影视，换个关键词试试</h3>
+      <p class="text-xs text-muted max-w-sm mx-auto">试试更换关键词，或返回榜单浏览当前热门内容。</p>
+      <div class="flex items-center justify-center gap-3 pt-2">
+        <Button variant="outline" size="sm" @click="exitSearch">返回榜单</Button>
+      </div>
     </div>
 
     <!-- 空状态优雅提示 -->
