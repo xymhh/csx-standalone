@@ -22,6 +22,7 @@ dependencies = [
     "cryptography>=43",
     "pycryptodome>=3.20",
     "beautifulsoup4>=4.12",
+    "telethon>=1.36,<2",
     "numpy>=1.26",
     "pillow>=10",
     "qrcode>=8",

@@ -14,7 +14,7 @@ DB_PATH = settings.data_dir / "csx.db"
 
 engine = create_engine(
     f"sqlite:///{DB_PATH}",
-    connect_args={"check_same_thread": False},
+    connect_args={"check_same_thread": False, "timeout": 30},
     future=True,
 )
 

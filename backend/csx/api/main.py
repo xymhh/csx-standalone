@@ -41,6 +41,7 @@ from csx.infra.drive_runtime import configured_drives
 from csx.infra.logging import setup_logging
 from csx.infra.scheduler import TaskScheduler
 from csx.infra.settings import settings
+from csx.infra.tg_worker import TgWorker
 
 PUBLIC_API_PATHS = {"/api/v1/auth/login", "/api/v1/stream/redirect"}
 
@@ -59,9 +60,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     )
     app.state.scheduler = scheduler
     await scheduler.start()
+    tg_worker = TgWorker(session_factory=SessionLocal)
+    app.state.tg_worker = tg_worker
+    await tg_worker.start()
     try:
         yield
     finally:
+        await tg_worker.stop()
         await scheduler.stop()
 
 

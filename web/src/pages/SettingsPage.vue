@@ -61,6 +61,7 @@ import {
   namingApi,
   searchSourcesApi,
   settingsApi,
+  telegramApi,
   type Account,
   type QrcodeCheckResponse,
   type QrcodeStartResponse,
@@ -69,6 +70,7 @@ import {
   type SearchSourceSchema,
   type SearchSourceTest,
   type SourceMeta,
+  type TgClientStatus,
 } from '@/lib/api'
 
 const navItems = [
@@ -95,6 +97,11 @@ const addingAccount = ref(false)
 
 // 高级参数折叠状态
 const showAdvDrama = ref(false)
+
+// TG 频道客户端状态
+const tgClientStatus = ref<TgClientStatus | null>(null)
+const tgScanning = ref(false)
+const tgScanSummary = ref('')
 
 // 重命名模板（MoviePilot 方案）
 const naming = ref({ movie_format: '', tv_format: '', variety_format: '' })
@@ -379,6 +386,55 @@ function insertNamingVariable(name: string) {
   })
 }
 
+function formatTgTimestamp(value?: string | null) {
+  if (!value) return '暂无'
+  const time = new Date(value)
+  if (Number.isNaN(time.getTime())) return value
+  return time.toLocaleString('zh-CN', { hour12: false })
+}
+
+const tgStatusText = computed(() => {
+  const status = tgClientStatus.value
+  if (!status) return '状态读取中'
+  if (!status.configured) return '未配置'
+  if (status.last_error) return '连接异常'
+  if (!status.enabled) return '监控已关闭'
+  return status.running ? '已连接' : '等待后台任务'
+})
+
+const tgStatusTone = computed<'good' | 'warn' | 'bad' | 'muted'>(() => {
+  const status = tgClientStatus.value
+  if (!status || !status.configured) return 'muted'
+  if (status.last_error) return 'bad'
+  if (!status.enabled || !status.running) return 'warn'
+  return 'good'
+})
+
+async function loadTgClientStatus() {
+  try {
+    tgClientStatus.value = await telegramApi.clientStatus()
+  } catch {
+    tgClientStatus.value = null
+  }
+}
+
+async function scanTgNow() {
+  tgScanning.value = true
+  tgScanSummary.value = ''
+  try {
+    const result = await telegramApi.clientScan()
+    const errorText = result.errors.length ? `，${result.errors.length} 个频道异常` : ''
+    tgScanSummary.value = `本次扫描 ${result.scanned_channels} 个频道，发现 ${result.new_messages} 条新消息，入库 ${result.ingested} 条${errorText}`
+    toast('Telegram 频道扫描完成', 'success')
+    await loadTgClientStatus()
+  } catch (cause) {
+    tgScanSummary.value = cause instanceof Error ? cause.message : '扫描失败'
+    toast(tgScanSummary.value, 'error')
+  } finally {
+    tgScanning.value = false
+  }
+}
+
 onMounted(() => {
   void loadAccounts()
   void loadAllSettings()
@@ -386,6 +442,7 @@ onMounted(() => {
   void loadSourceMeta()
   void loadSearchProxy()
   void loadNaming()
+  void loadTgClientStatus()
 })
 
 async function saveAll() {
@@ -493,6 +550,7 @@ async function saveAll() {
     } else {
       toast('设置保存成功', 'success')
     }
+    void loadTgClientStatus()
   } catch (cause) {
     toast(cause instanceof Error ? cause.message : '保存失败', 'error')
   } finally {
@@ -2102,6 +2160,29 @@ async function exchangeHdhiveOauth() {
             />
             <p class="text-[11px] leading-relaxed text-zinc-500">
               来自 MoviePilot 插件「频道监控」的登录凭据，用你自己的账号（而非机器人）读取公开与私有频道。会话串等同密码，仅保存在本机数据库。
+            </p>
+          </div>
+
+          <div class="space-y-2 rounded-xl border border-white/[0.06] bg-zinc-900/40 p-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="flex flex-wrap items-center gap-2">
+                <Badge :tone="tgStatusTone" :pulse="tgScanning">{{ tgStatusText }}</Badge>
+                <span class="text-[11px] text-zinc-500">上次扫描：{{ formatTgTimestamp(tgClientStatus?.last_scan_at) }}</span>
+                <span v-if="tgClientStatus?.channels.length" class="text-[11px] text-zinc-500">监控 {{ tgClientStatus.channels.length }} 个频道</span>
+              </div>
+              <Button variant="secondary" size="sm" :disabled="tgScanning || !tgClientStatus?.configured" @click="scanTgNow">
+                <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': tgScanning }" />
+                {{ tgScanning ? '扫描中' : '立即扫描' }}
+              </Button>
+            </div>
+            <p v-if="tgClientStatus?.last_error" class="text-[11px] leading-relaxed text-rose-400">
+              {{ tgClientStatus.last_error }}
+            </p>
+            <p v-else-if="tgClientStatus && !tgClientStatus.configured" class="text-[11px] leading-relaxed text-zinc-500">
+              请填写并保存 API ID、API Hash 与 StringSession，后台任务会自动开始定时扫描。
+            </p>
+            <p v-if="tgScanSummary" class="text-[11px] leading-relaxed text-zinc-400">
+              {{ tgScanSummary }}
             </p>
           </div>
 
