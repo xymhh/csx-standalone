@@ -117,6 +117,8 @@ def launch_challenge_context(proxy: Any):
         raise RuntimeError("未安装 cloakbrowser，无法拉起反盾浏览器上下文")
     return launch_context(
         headless=True, proxy=browser_proxy(proxy),
+        # 容器内 /dev/shm 偏小会让 Chromium 直接退出，禁用共享内存即可正常拉起
+        args=["--disable-dev-shm-usage"],
         humanize=getattr(settings, "CLOAKBROWSER_HUMANIZE", True),
         human_preset="careful",
     )

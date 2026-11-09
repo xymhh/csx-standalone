@@ -16,7 +16,9 @@ RUN pip install --no-cache-dir .
 # 反盾浏览器：构建期下载二进制（免 key 的稳定版），运行期才能直接拉起
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+        libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libatspi2.0-0 \
+        libcups2 libdrm2 libdbus-1-3 libexpat1 libuuid1 \
+        libx11-6 libxcomposite1 libxext6 libxi6 libxrender1 libxshmfence1 \
         libxkbcommon0 libxdamage1 libxfixes3 libxrandr2 libgbm1 \
         libasound2 libpango-1.0-0 libcairo2 fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/* \
