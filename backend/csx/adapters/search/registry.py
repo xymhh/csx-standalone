@@ -6,7 +6,7 @@ import secrets
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
-from typing import Any
+from typing import Any, ClassVar
 from urllib.parse import parse_qs, urlparse
 
 from csx.vendor.search.scanner import SearchSourceRegistry
@@ -190,7 +190,7 @@ class SearchSourceAdapter:
         return definition, definition.create_client(config, context)
 
     #: 渠道原始字段名 → 中文标签（对齐原版插件账户卡片的展示口径）
-    _DETAIL_LABELS = {
+    _DETAIL_LABELS: ClassVar[dict[str, str]] = {
         "level": "用户等级",
         "points": "可用积分",
         "signin_days": "签到天数",

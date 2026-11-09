@@ -25,7 +25,8 @@ dependencies = [
     "numpy>=1.26",
     "pillow>=10",
     "qrcode>=8",
-    "cloakbrowser",
+    # 0.4+ 起安装即需 license key；0.3.19 用免 key 的 v146 二进制
+    "cloakbrowser==0.3.19",
     "torf>=4",
 ]
 
