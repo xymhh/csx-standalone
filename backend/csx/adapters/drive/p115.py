@@ -144,6 +144,12 @@ class P115DriveAdapter:
             else (f"部分 115 文件转存失败：{reason}" if reason else "部分 115 文件转存失败"),
         )
 
+    def remember(self, file_id: str, item, directory: str) -> None:
+        """登记外部链路（跨盘中继等）刚写入的文件，供后续移动/重命名复用。"""
+        if item is None:
+            return
+        self._known[str(file_id)] = (item, str(directory))
+
     def move(self, file_id: str, target_dir: str) -> None:
         known = self._known.get(str(file_id))
         item = known[0] if known else None

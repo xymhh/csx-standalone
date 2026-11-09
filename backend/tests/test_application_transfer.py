@@ -166,11 +166,12 @@ def test_expired_share_goes_to_dead_letter():
     assert repos.tasks.transitions[-1] is TaskState.DEAD_LETTER
 
 
-def test_organize_failure_keeps_transferred_file_and_task_succeeds():
+def test_organize_failure_keeps_transferred_file_and_retries_task():
     result, repos = run(FakeDrive(organize_fails=True))
-    assert result["ok"] and not result["organized"]
-    assert repos.library.items
-    assert repos.tasks.transitions[-1] is TaskState.SUCCEEDED
+    assert not result["ok"] and not result["organized"]
+    assert "整理失败" in result["error"]
+    assert repos.library.items  # 已落盘的文件记录保留，重试不重复下载
+    assert repos.tasks.transitions[-1] in {TaskState.RETRY_WAIT, TaskState.DEAD_LETTER}
 
 
 def test_same_idempotency_key_only_transfers_once():

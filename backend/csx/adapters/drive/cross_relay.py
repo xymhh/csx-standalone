@@ -115,13 +115,18 @@ class CrossRelay:
                 "size": int(found.size or 0),
                 "sha1": str(found.sha1 or ""),
                 "method": str(finished.get("method") or "fallback"),
+                "file": found,
             }
+        landed = target_provider.require(CloudDriveCapability.FILE_QUERY).find_file(
+            target_dir, resolved_name
+        )
         return {
             "file_id": file_id,
             "path": f"{target_dir.rstrip('/')}/{resolved_name}",
             "size": int(finished.get("result_file_size") or 0),
             "sha1": str(finished.get("result_sha1") or ""),
             "method": str(finished.get("method") or "fallback"),
+            "file": landed,
         }
 
     def cleanup_cache(self) -> int:

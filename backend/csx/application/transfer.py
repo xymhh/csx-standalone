@@ -342,6 +342,13 @@ def execute_transfer(
                     relay_error = _fmt_error(error)
                     break
                 relayed.append((item["file_id"], item["path"], item["size"], item["sha1"]))
+                remember = getattr(target_drive, "remember", None)
+                if remember is not None:
+                    remember(
+                        item["file_id"],
+                        item.get("file"),
+                        posixpath.dirname(item["path"]) or "/",
+                    )
                 try:
                     drive.delete_path(path)
                 except Exception as error:  # 源盘中转清理失败只记日志
@@ -436,6 +443,17 @@ def execute_transfer(
                 "state": next_state.value,
                 "organized": organized,
                 "error": error,
+            }
+        if not organized:
+            detail = "；".join(str(error) for error in errors)[:500] or "未知原因"
+            logger.warning("整理失败，文件已落盘但未入库：%s", detail)
+            state = _retry_or_dead_letter(repos, task_id, current_attempt, f"整理失败：{detail}")
+            return {
+                "ok": False,
+                "task_id": task_id,
+                "state": state.value,
+                "organized": False,
+                "error": f"整理失败：{detail}",
             }
         _transition(repos, task_id, TaskState.SUCCEEDED)
         return {
