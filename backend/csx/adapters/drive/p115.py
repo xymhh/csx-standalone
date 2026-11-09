@@ -19,14 +19,15 @@ class P115DriveAdapter:
 
     @staticmethod
     def _share_url(share_url: str, password: str) -> str:
-        if not password:
-            return share_url
+        # pansou/频道抓来的链接多为 115cdn.com，p115client 的解析器只认 115.com
         parsed = urlsplit(share_url)
+        netloc = parsed.netloc
+        if "115cdn.com" in netloc:
+            netloc = netloc.replace("115cdn.com", "115.com")
         query = dict(parse_qsl(parsed.query, keep_blank_values=True))
-        query["password"] = password
-        return urlunsplit(
-            (parsed.scheme, parsed.netloc, parsed.path, urlencode(query), parsed.fragment)
-        )
+        if password:
+            query["password"] = password
+        return urlunsplit((parsed.scheme, netloc, parsed.path, urlencode(query), parsed.fragment))
 
     def check_share(self, share_url: str, password: str = "") -> ShareStatus:
         status = self.share.check_share_status(self._share_url(share_url, password))
@@ -40,6 +41,9 @@ class P115DriveAdapter:
 
     def list_share_files(self, share_url: str, password: str = "") -> list[ShareFile]:
         items = self.share.list_share_files(self._share_url(share_url, password))
+        error = str(getattr(self.share, "last_list_error", "") or "")
+        if not items and error:
+            raise RuntimeError(f"列出分享文件失败：{error}")
         return [
             ShareFile(
                 str(item.get("id", item.get("file_id", ""))),

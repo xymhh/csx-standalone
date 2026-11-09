@@ -330,6 +330,7 @@ class ShareService(OwnerDelegator):
             return []
 
         files = []
+        self.last_list_error = ""
         try:
             rows = self.rate_limiter.call(
                 lambda: list(share_iterdir(
@@ -394,6 +395,7 @@ class ShareService(OwnerDelegator):
         except Exception as e:
             prefix = f"{log_prefix} " if log_prefix else ""
             logger.error(f"{prefix}列出分享文件失败：{e}")
+            self.last_list_error = f"{prefix}{e}".strip()
 
         return files
 
