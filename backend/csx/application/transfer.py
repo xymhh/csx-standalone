@@ -278,7 +278,10 @@ def execute_transfer(
             if not selected and len(share_files) == 1:
                 selected = unparsed[:1]
         if not selected:
-            error = f"分享中未找到 S{season:02d}E{episode:02d} 文件"
+            if not share_files:
+                error = "分享文件列表为空（115 可能限流或分享不可读）"
+            else:
+                error = f"分享中未找到 S{season:02d}E{episode:02d} 文件"
             next_state = _retry_or_dead_letter(repos, task_id, current_attempt, error)
             return {"ok": False, "task_id": task_id, "state": next_state.value, "error": error}
 
