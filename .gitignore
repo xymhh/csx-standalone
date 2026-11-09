@@ -19,4 +19,3 @@ dist/
 *.egg-info/
 .pytest_cache/
 /*_TODO.md
-*_TODO.md
