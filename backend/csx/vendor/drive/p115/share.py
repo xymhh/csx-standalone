@@ -31,7 +31,7 @@ class ShareService(OwnerDelegator):
 
     # share_iterdir 默认 page_size=10000，115 会直接返回空列表，必须显式给合理分页
     SHARE_PAGE_SIZE = 200
-    SHARE_SNAP_PAGE_SIZE = 300
+    SHARE_SNAP_PAGE_SIZE = 20
 
     def extract_share_info(self, url: str) -> Dict[str, str]:
         """
@@ -271,6 +271,8 @@ class ShareService(OwnerDelegator):
         )
         if not files and self.client:
             files = self._walk_share_snap(share_code, receive_code, cid=int(cid or 0))
+            if not files and not self.last_list_error:
+                self.last_list_error = str(getattr(self, "last_snap_debug", "") or "")
         if files:
             self._share_file_cache[cache_key] = copy.deepcopy(files)
         return files
@@ -283,8 +285,6 @@ class ShareService(OwnerDelegator):
             "cid": int(cid or 0),
             "limit": self.SHARE_SNAP_PAGE_SIZE,
             "offset": int(offset),
-            "asc": 1,
-            "o": "",
         }
         resp = self.rate_limiter.call(
             self.client.share_snap, payload, headers={"user-agent": IOS_SHARE_USER_AGENT}
@@ -308,6 +308,7 @@ class ShareService(OwnerDelegator):
         offset = 0
         while True:
             rows, count = self._snap_list(share_code, receive_code, cid, offset)
+            self.last_snap_debug = f"cid={cid} count={count} rows={len(rows)}"
             for item in rows:
                 name = str(item.get("n") or item.get("name") or item.get("file_name") or "")
                 is_dir = str(item.get("d") or item.get("is_dir") or "").strip().lower() in {
