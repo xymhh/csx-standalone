@@ -60,6 +60,17 @@ def _retry_or_dead_letter(repos, task_id: int, attempt: int, error: str) -> Task
     return state
 
 
+def _set_stage(repos, task_id: int, stage: str) -> None:
+    """记录进行中的阶段；失败只记日志，绝不影响转存主流程。"""
+    setter = getattr(getattr(repos, "tasks", None), "set_stage", None)
+    if setter is None:
+        return
+    try:
+        setter(task_id, stage)
+    except Exception:  # 阶段只是展示信息，不能成为失败源
+        logger.debug("记录任务阶段失败 task=%s stage=%s", task_id, stage, exc_info=True)
+
+
 _VIDEO_SUFFIXES = (
     ".mkv",
     ".mp4",
@@ -204,6 +215,7 @@ def execute_transfer(
                         "state": next_state.value,
                         "error": error,
                     }
+                _set_stage(repos, task_id, "transferring")
                 outcome = drive.transfer(
                     share_url,
                     str(resource["target_dir"]),
@@ -307,6 +319,7 @@ def execute_transfer(
         category = resolve_category(media_row or {}, categories)
         inbox = posixpath.join(layout["inbox_root"], key)
         target_inbox = posixpath.join(target_layout["inbox_root"], key)
+        _set_stage(repos, task_id, "transferring")
         try:
             outcome = drive.transfer(
                 share_url,
@@ -324,6 +337,7 @@ def execute_transfer(
             return {"ok": False, "task_id": task_id, "state": next_state.value, "error": error}
 
         if cross_ready:
+            _set_stage(repos, task_id, "relaying")
             relayed: list[tuple[str, str, int, str]] = []
             relay_error = ""
             for _file_id, path, _size, _sha1 in outcome.created:
@@ -371,6 +385,7 @@ def execute_transfer(
         sidecars = []
         organized_dir = None
         video_exts = {"mkv", "mp4", "avi", "mov", "wmv", "ts", "m2ts", "webm", "flv"}
+        _set_stage(repos, task_id, "organizing")
         for file_id, path, size, sha1 in outcome.created:
             filename = posixpath.basename(path)
             parsed_season, parsed_episode = parse_episode_from_name(filename)

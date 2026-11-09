@@ -131,6 +131,8 @@ class TransferTask(Base):
         ForeignKey("discovered_resource.id"), index=True
     )
     state: Mapped[str] = mapped_column(String, default="queued", nullable=False, index=True)
+    # 进行中的阶段文案（checking/transferring/relaying/organizing），终态清空
+    stage: Mapped[str] = mapped_column(String, default="", nullable=False)
     attempt: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     next_retry_at: Mapped[datetime | None] = mapped_column(DateTime, index=True)
     dead_letter: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

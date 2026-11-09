@@ -166,16 +166,29 @@ class SqlAlchemyTaskRepository:
         if dst is TaskState.RUNNING:
             row.attempt += 1
             row.next_retry_at = None
+            row.stage = "checking"
         elif dst is TaskState.RETRY_WAIT:
             row.next_retry_at = next_retry_at(now, row.attempt)
+            row.stage = ""
         elif dst is TaskState.DEAD_LETTER:
             row.dead_letter = 1
+            row.stage = ""
+        else:
+            row.stage = ""
         if error:
             row.last_error = error
         self.session.flush()
         if self.on_transition is not None:
             self.on_transition(task_id, src.value, dst.value, error)
         return dst
+
+    def set_stage(self, task_id: int, stage: str) -> None:
+        """记录进行中的阶段文案，不改变状态机与时间戳。"""
+        row = self.session.get(TransferTask, task_id)
+        if row is None:
+            return
+        row.stage = str(stage or "")
+        self.session.flush()
 
     def get(self, task_id: int) -> dict | None:
         row = self.session.get(TransferTask, task_id)
@@ -186,6 +199,7 @@ class SqlAlchemyTaskRepository:
             "idempotency_key": row.idempotency_key,
             "resource_id": row.resource_id,
             "state": row.state,
+            "stage": row.stage,
             "attempt": row.attempt,
             "last_error": row.last_error,
         }

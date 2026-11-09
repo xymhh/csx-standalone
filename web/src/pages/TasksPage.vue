@@ -1,38 +1,26 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import {
-  DownloadCloud,
-  History,
-  Layers,
-  ListChecks,
-  Plus,
-  RefreshCw,
-  Trash2,
-  HardDrive,
-  Clock,
-} from '@lucide/vue'
+import { DownloadCloud, HardDrive, Layers, Plus, RefreshCw, Trash2 } from '@lucide/vue'
 
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
 import Dialog from '@/components/ui/Dialog.vue'
-import Input from '@/components/ui/Input.vue'
 import Select from '@/components/ui/Select.vue'
-import Table from '@/components/ui/Table.vue'
 import Tabs from '@/components/ui/Tabs.vue'
 import CandidateCard from '@/components/domain/CandidateCard.vue'
-import TaskRow from '@/components/domain/TaskRow.vue'
+import TaskQueueCard from '@/components/domain/TaskQueueCard.vue'
+import TransferHistory from '@/components/domain/TransferHistory.vue'
 import { useEvents } from '@/composables/useEvents'
 import { useToast } from '@/composables/useToast'
 import {
   accountsApi,
   candidatesApi,
-  historyApi,
   offlineApi,
   tasksApi,
   type Account,
   type Candidate,
   type OfflineTask,
-  type Task,
+  type TransferTaskEnriched,
 } from '@/lib/api'
 
 const tabs = [
@@ -43,13 +31,12 @@ const tabs = [
 ]
 const activeTab = ref('queue')
 
-const rows = ref<Task[]>([])
-const historyRows = ref<Task[]>([])
+const rows = ref<TransferTaskEnriched[]>([])
+const historyRef = ref<InstanceType<typeof TransferHistory> | null>(null)
 const candidates = ref<Candidate[]>([])
 const offlineTasks = ref<OfflineTask[]>([])
 const accounts = ref<Account[]>([])
 const selectedAccountId = ref<string>('')
-const selectedHistory = ref<number[]>([])
 const { toast } = useToast()
 
 // 添加离线任务
@@ -59,12 +46,61 @@ const adding = ref(false)
 const loadingOffline = ref(false)
 
 async function loadQueue() {
-  rows.value = await tasksApi.list()
+  try {
+    rows.value = await tasksApi.list()
+  } catch (cause) {
+    toast(cause instanceof Error ? cause.message : '加载转存队列失败', 'error')
+  }
 }
 
-async function loadHistory() {
-  historyRows.value = await historyApi.list()
-}
+// 同一部影视的任务合并成一张卡，和「我的追剧」的媒体视角一致
+const queueGroups = computed(() => {
+  const order: Record<string, number> = { running: 0, retry_wait: 1, queued: 2, dead_letter: 3 }
+  const map = new Map<
+    string,
+    {
+      key: string
+      title: string
+      year: number | null
+      type: string
+      posterUrl: string
+      tasks: TransferTaskEnriched[]
+    }
+  >()
+  for (const task of rows.value) {
+    const key = task.media_id ? `media:${task.media_id}` : `task:${task.id}`
+    const group = map.get(key)
+    if (group) {
+      group.tasks.push(task)
+      continue
+    }
+    map.set(key, {
+      key,
+      title: task.media_title || task.display_name || `手动转存 #${task.id}`,
+      year: task.media_year,
+      type: task.media_type,
+      posterUrl: task.poster_url,
+      tasks: [task],
+    })
+  }
+  return [...map.values()]
+    .map((group) => ({
+      ...group,
+      tasks: [...group.tasks].sort((a, b) => (order[a.state] ?? 9) - (order[b.state] ?? 9)),
+    }))
+    .sort((a, b) => (order[a.tasks[0]?.state] ?? 9) - (order[b.tasks[0]?.state] ?? 9))
+})
+
+const queueSummary = computed(() => {
+  const counts: Record<string, number> = {}
+  for (const task of rows.value) counts[task.state] = (counts[task.state] ?? 0) + 1
+  const parts: string[] = []
+  if (counts.running) parts.push(`转存中 ${counts.running}`)
+  if (counts.retry_wait) parts.push(`等待重试 ${counts.retry_wait}`)
+  if (counts.queued) parts.push(`排队 ${counts.queued}`)
+  if (counts.dead_letter) parts.push(`失败 ${counts.dead_letter}`)
+  return parts.join(' · ')
+})
 
 async function loadCandidates() {
   candidates.value = await candidatesApi.list({ state: 'discovered' })
@@ -101,14 +137,13 @@ onMounted(() => {
 useEvents((e) => {
   if (e.type === 'task_status') {
     void loadQueue()
-    if (activeTab.value === 'history') void loadHistory()
+    if (activeTab.value === 'history') historyRef.value?.reload()
   }
 })
 
 function switchTab(val: string) {
   activeTab.value = val
   if (val === 'queue') void loadQueue()
-  if (val === 'history') void loadHistory()
   if (val === 'offline') void loadOffline()
   if (val === 'candidates') void loadCandidates()
 }
@@ -123,18 +158,6 @@ async function cancel(id: number) {
   await tasksApi.cancel(id)
   toast('转存任务已取消', 'info')
   await loadQueue()
-}
-
-async function retryHistoryBatch() {
-  if (!selectedHistory.value.length) return
-  try {
-    const res = await historyApi.retryBatch(selectedHistory.value)
-    toast(`已重新排队 ${res.retried.length} 个任务`, 'success')
-    selectedHistory.value = []
-    await loadHistory()
-  } catch (cause) {
-    toast(cause instanceof Error ? cause.message : '重试失败', 'error')
-  }
 }
 
 async function acceptCandidate(id: number) {
@@ -200,78 +223,41 @@ async function deleteOffline(hash: string) {
 
     <!-- 1. 正在转存队列 -->
     <div v-if="activeTab === 'queue'" class="space-y-4">
-      <div v-if="!rows.length" class="rounded-2xl border border-dashed border-border/60 bg-surface/30 p-16 text-center text-xs text-muted">
+      <div
+        v-if="!rows.length"
+        class="rounded-2xl border border-dashed border-border/60 bg-surface/30 p-16 text-center text-xs text-muted"
+      >
         <DownloadCloud class="mx-auto mb-2 h-8 w-8 text-subtle/50" />
         <p class="font-medium text-fg">当前没有正在转存的任务</p>
         <p class="mt-1 text-subtle">系统在后台全天候监控追剧清单，一旦发现新资源会自动加入此队列。</p>
       </div>
 
-      <div v-else class="space-y-2.5">
-        <TaskRow
-          v-for="task in rows"
-          :key="task.id"
-          :task="task"
-          @retry="retry"
-          @cancel="cancel"
-        />
-      </div>
+      <template v-else>
+        <div class="flex items-center justify-between px-1">
+          <p class="text-xs text-muted">{{ queueSummary }}</p>
+          <Button variant="ghost" size="sm" @click="loadQueue">
+            <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
+            刷新
+          </Button>
+        </div>
+        <div class="space-y-2.5">
+          <TaskQueueCard
+            v-for="group in queueGroups"
+            :key="group.key"
+            :title="group.title"
+            :year="group.year"
+            :type="group.type"
+            :poster-url="group.posterUrl"
+            :tasks="group.tasks"
+            @retry="retry"
+            @cancel="cancel"
+          />
+        </div>
+      </template>
     </div>
 
     <!-- 2. 转存历史 -->
-    <div v-if="activeTab === 'history'" class="space-y-4">
-      <div class="flex items-center justify-between">
-        <span class="text-xs text-muted">已记录终态任务流水</span>
-        <Button
-          variant="outline"
-          size="sm"
-          :disabled="!selectedHistory.length"
-          @click="retryHistoryBatch"
-        >
-          批量重试所选 ({{ selectedHistory.length }})
-        </Button>
-      </div>
-
-      <div class="rounded-xl border border-border/60 bg-surface/40 overflow-hidden">
-        <Table>
-          <thead class="border-b border-border/60 text-xs text-subtle bg-surface-2/20">
-            <tr>
-              <th class="p-3 w-10 text-center">选择</th>
-              <th class="p-3">任务编号</th>
-              <th class="p-3">状态</th>
-              <th class="p-3">尝试次数</th>
-              <th class="p-3">错误信息</th>
-              <th class="p-3 text-right">时间</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-border/30 text-xs">
-            <tr v-for="row in historyRows" :key="row.id" class="transition-colors hover:bg-surface-2/30">
-              <td class="p-3 text-center">
-                <input
-                  v-if="row.state === 'dead_letter'"
-                  v-model="selectedHistory"
-                  type="checkbox"
-                  :value="row.id"
-                  class="h-4 w-4 rounded accent-primary"
-                />
-              </td>
-              <td class="p-3 font-mono font-medium text-fg">#{{ row.id }}</td>
-              <td class="p-3">
-                <Badge :tone="row.state === 'succeeded' ? 'good' : 'bad'">
-                  {{ row.state === 'succeeded' ? '已转存入库' : '转存失败' }}
-                </Badge>
-              </td>
-              <td class="p-3 font-mono text-subtle">{{ row.attempt }}</td>
-              <td class="p-3 max-w-sm truncate text-subtle" :title="row.last_error ?? ''">
-                {{ row.last_error ?? '—' }}
-              </td>
-              <td class="p-3 text-right text-subtle font-mono whitespace-nowrap">
-                {{ new Date(row.updated_at).toLocaleString() }}
-              </td>
-            </tr>
-          </tbody>
-        </Table>
-      </div>
-    </div>
+    <TransferHistory v-if="activeTab === 'history'" ref="historyRef" />
 
     <!-- 3. 115 云端离线任务 -->
     <div v-if="activeTab === 'offline'" class="space-y-4">

@@ -70,6 +70,20 @@ def assert_transition(src: TaskState, dst: TaskState) -> None:
         raise InvalidTransition(f"Cannot transition from {src} to {dst}")
 
 
+# 进行中的阶段（只用于展示，不代表可量化的进度）
+STAGE_LABELS: dict[str, str] = {
+    "checking": "校验分享",
+    "transferring": "转存中",
+    "relaying": "跨盘中继",
+    "organizing": "整理归档",
+}
+
+
+def stage_label(stage: str | None) -> str:
+    """把阶段标识翻译成展示文案，未知阶段返回空串。"""
+    return STAGE_LABELS.get(str(stage or ""), "")
+
+
 def backoff_seconds(attempt: int) -> int:
     """计算退避秒数。attempt <= 0 按 1 处理。"""
     if attempt <= 1:

@@ -1,4 +1,15 @@
 <script setup lang="ts">
-import {onMounted,ref} from 'vue';import {historyApi,type Task} from '@/lib/api';import Table from '@/components/ui/Table.vue';import Badge from '@/components/ui/Badge.vue';import Button from '@/components/ui/Button.vue';import {useToast} from '@/composables/useToast';const rows=ref<Task[]>([]);const selected=ref<number[]>([]);const provider=ref('');const {toast}=useToast();async function load(){rows.value=await historyApi.list({provider:provider.value||undefined})}onMounted(load);async function retry(){const r=await historyApi.retryBatch(selected.value);toast(`已重新排队 ${r.retried.length} 项`,'success');selected.value=[];await load()}
+import TransferHistory from '@/components/domain/TransferHistory.vue'
 </script>
-<template><div class="space-y-5"><div class="flex flex-wrap items-center justify-between gap-3"><div><h2 class="text-xl font-semibold">转存流水</h2><p class="text-sm text-muted">成功与终止任务记录</p></div><div class="flex gap-2"><input v-model="provider" class="min-h-[44px] rounded-md border border-border bg-surface px-3 text-sm" placeholder="按来源筛选" @change="load"/><Button :disabled="!selected.length" @click="retry">批量重试 ({{selected.length}})</Button></div></div><Table><thead class="border-b border-border text-muted"><tr><th class="p-3">选择</th><th class="p-3">任务</th><th class="p-3">状态</th><th class="p-3">尝试</th><th class="p-3">错误详情</th><th class="p-3">更新时间</th></tr></thead><tbody><tr v-for="row in rows" :key="row.id" class="border-b border-border"><td class="p-3"><input v-if="row.state==='dead_letter'" v-model="selected" type="checkbox" :value="row.id" class="h-5 w-5 accent-primary"/></td><td class="p-3">#{{row.id}}</td><td class="p-3"><Badge :tone="row.state==='succeeded'?'good':'bad'">{{row.state}}</Badge></td><td class="p-3">{{row.attempt}}</td><td class="max-w-64 truncate p-3 text-muted" :title="row.last_error??''">{{row.last_error??'—'}}</td><td class="whitespace-nowrap p-3 text-muted">{{new Date(row.updated_at).toLocaleString()}}</td></tr></tbody></Table><p v-if="!rows.length" class="text-sm text-muted">暂无终态任务</p></div></template>
+
+<template>
+  <div class="space-y-6">
+    <div>
+      <h2 class="text-xl font-semibold tracking-tight text-fg">转存历史</h2>
+      <p class="mt-0.5 text-xs text-muted">
+        按影视汇总的转存流水，点开可看到每一集的文件名、大小、来源与失败原因
+      </p>
+    </div>
+    <TransferHistory />
+  </div>
+</template>
