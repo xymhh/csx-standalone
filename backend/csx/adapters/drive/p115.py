@@ -11,9 +11,10 @@ from csx.ports.drive import CloudDirectory, CloudFile, ShareFile, ShareStatus, T
 class P115DriveAdapter:
     provider = "115"
 
-    def __init__(self, share_service, files_service):
+    def __init__(self, share_service, files_service, mutation_service=None):
         self.share = share_service
         self.files = files_service
+        self.mutation = mutation_service
         self._known = {}
         self._directory_paths = {"0": "/"}
 
@@ -146,7 +147,11 @@ class P115DriveAdapter:
     def move(self, file_id: str, target_dir: str) -> None:
         known = self._known.get(str(file_id))
         item = known[0] if known else None
-        moved = self.files.move_file(item, target_dir, item.name) if item else None
+        if item is None:
+            raise RuntimeError(f"115 移动文件失败: {file_id}（文件未登记）")
+        if self.mutation is None:
+            raise RuntimeError(f"115 移动文件失败: {file_id}（缺少变更能力）")
+        moved = self.mutation.move_file(item, target_dir, item.name)
         if moved is None:
             raise RuntimeError(f"115 移动文件失败: {file_id}")
         self._known[str(file_id)] = (moved, target_dir)
@@ -154,7 +159,11 @@ class P115DriveAdapter:
     def rename(self, file_id: str, new_name: str) -> None:
         known = self._known.get(str(file_id))
         item, path = known if known else (None, "")
-        if item is None or not self.files.rename_file(path, item, new_name):
+        if item is None:
+            raise RuntimeError(f"115 重命名失败: {file_id}（文件未登记）")
+        if self.mutation is None:
+            raise RuntimeError(f"115 重命名失败: {file_id}（缺少变更能力）")
+        if not self.mutation.rename_file(path, item, new_name):
             raise RuntimeError(f"115 重命名失败: {file_id}")
         self._known[str(file_id)] = (item, path)
 

@@ -106,6 +106,7 @@ class DriveRegistry:
             return P115DriveAdapter(
                 services[CloudDriveCapability.SHARE_TRANSFER],
                 services[CloudDriveCapability.FILE_QUERY],
+                services[CloudDriveCapability.FILE_MUTATION],
             )
         if provider == "quark":
             from csx.vendor.core.cloud import CloudDriveCapability
