@@ -473,6 +473,7 @@ class ShareService(OwnerDelegator):
 
         files = []
         self.last_list_error = ""
+        self.last_iter_debug = ""
         try:
             raw = self.rate_limiter.call(
                 lambda: share_iterdir(
@@ -492,6 +493,7 @@ class ShareService(OwnerDelegator):
                 logger.error(f"{log_prefix} {self.last_list_error}".strip())
                 raw = []
             rows = [row for row in list(raw or []) if isinstance(row, dict)]
+            self.last_iter_debug = f"cid={cid} raw={type(raw).__name__} rows={len(rows)}"
 
             for item in rows:
                 file_info = {

@@ -96,7 +96,14 @@ class P115DriveAdapter:
         items = [item for item in (raw_items or []) if isinstance(item, dict)]
         error = str(getattr(self.share, "last_list_error", "") or "")
         if not items:
-            raise RuntimeError(f"列出分享文件为空：{error or '115 未返回任何文件'}")
+            share = self.share
+            client = getattr(share, "client", None)
+            raise RuntimeError(
+                f"列出分享文件为空：{error or '无错误信息'}"
+                f" | client={type(client).__name__}"
+                f" | iter={getattr(share, 'last_iter_debug', '') or '-'}"
+                f" | snap={getattr(share, 'last_snap_debug', '') or '-'}"
+            )
         return [
             ShareFile(
                 str(item.get("id", item.get("file_id", ""))),
