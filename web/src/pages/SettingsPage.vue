@@ -1492,7 +1492,11 @@ async function exchangeHdhiveOauth() {
           >
             <component :is="sourceIcon(s.id)" class="h-3.5 w-3.5 shrink-0 text-zinc-500" />
             <span class="flex-1 text-left">{{ s.name }}</span>
-            <Check v-if="selectedSourceId === s.id" class="h-3.5 w-3.5 text-emerald-400" />
+            <span
+              v-if="sourceValues[s.id]?.enabled === false"
+              class="rounded bg-white/[0.06] px-1 py-0.5 text-[10px] text-zinc-500"
+            >停用</span>
+            <Check v-else-if="selectedSourceId === s.id" class="h-3.5 w-3.5 text-emerald-400" />
           </button>
         </div>
       </div>
