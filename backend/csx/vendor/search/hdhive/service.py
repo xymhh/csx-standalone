@@ -172,6 +172,7 @@ class HDHiveSearchService(OwnerDelegator):
                     should_stop=self._stop_requested,
                     get_data_func=getattr(self, "get_data", None),
                     save_data_func=getattr(self, "save_data", None),
+                    base_url=getattr(self, "_hdhive_base_url", ""),
                 )
                 self._hdhive_web_client = client
                 self._hdhive_web_client_owned = True

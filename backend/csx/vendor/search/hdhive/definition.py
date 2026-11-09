@@ -64,6 +64,7 @@ class HDHiveSourceDefinition(SearchSourceDefinition):
         owner._hdhive_password = str(value("hdhive_password", "") or "")
         mode = str(value("hdhive_query_mode", "web") or "web").lower()
         owner._hdhive_query_mode = mode if mode in {"api", "web"} else "web"
+        owner._hdhive_base_url = str(value("hdhive_base_url", "") or "").strip()
         owner._hdhive_auto_unlock = bool(value("hdhive_auto_unlock", False))
         owner._hdhive_max_unlock_points = max(0, int(value("hdhive_max_unlock_points", 50) or 0))
         owner._hdhive_max_points_per_sub = max(0, int(value("hdhive_max_points_per_sub", 20) or 0))

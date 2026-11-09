@@ -109,27 +109,54 @@ def _probe_hdhaven(config: dict[str, Any]) -> ProbeResult:
 
 
 def _probe_hdhive(config: dict[str, Any]) -> ProbeResult:
-    import requests
+    """走真实客户端：WebAPI 模式需要穿透 Cloudflare 质询，裸 HTTP 请求会误报 403。"""
+    mode = _text(config, "hdhive_query_mode", "web").lower() or "web"
+    base_url = _text(config, "hdhive_base_url", "https://re0.me")
+    if mode == "api":
+        from csx.vendor.search.hdhive.open.client import HDHiveOpenAPIClient
 
-    base_url = _text(config, "hdhive_base_url", "https://re0.me").rstrip("/")
+        client_id = _text(config, "hdhive_client_id")
+        client_secret = _text(config, "hdhive_client_secret")
+        if not client_id or not client_secret:
+            return False, "请先填写 HDHive OpenAPI 的 Client ID 与 Secret"
+        client = HDHiveOpenAPIClient(
+            client_id=client_id,
+            client_secret=client_secret,
+            access_token=_text(config, "hdhive_access_token"),
+            base_url=base_url,
+            proxy=_proxy(config),
+        )
+        try:
+            data = client.get_account_info() or {}
+            name = str(data.get("name") or data.get("username") or client_id)
+            return True, f"授权正常：{name}"
+        except Exception as error:
+            return _error("HDHive OpenAPI 授权失败", error)
+        finally:
+            _close(client)
+
+    from csx.vendor.search.hdhive.web.client import HDHiveClient
+
+    username = _text(config, "hdhive_username")
+    password = _text(config, "hdhive_password")
+    if not username or not password:
+        return False, "请先填写 HDHive 的账号与密码"
+    client = HDHiveClient(
+        username=username,
+        password=password,
+        proxy=_proxy(config),
+        request_interval=_number(config, "hdhive_request_interval", 5),
+        timeout=int(_number(config, "hdhive_timeout", 60)),
+        base_url=base_url,
+    )
     try:
-        response = requests.get(
-            f"{base_url}/api/search",
-            params={"keyword": KEYWORD_CN},
-            timeout=12,
-            proxies=_proxies(config),
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
-        )
+        data = client.get_account_info() or {}
+        name = str(data.get("name") or data.get("username") or username)
+        return True, f"登录正常：{name}"
     except Exception as error:
-        return _error("HDHive 请求失败", error)
-    if response.status_code in {401, 403}:
-        return False, (
-            f"HDHive 拒绝访问（HTTP {response.status_code}），"
-            "通常是 Cloudflare 拦截了服务器出口 IP，可稍后再试或更换镜像地址"
-        )
-    if response.status_code >= 400:
-        return False, f"HDHive 返回 HTTP {response.status_code}"
-    return True, "连通正常（站点可访问）"
+        return _error("HDHive 登录失败", error)
+    finally:
+        _close(client)
 
 
 def _probe_mikan(config: dict[str, Any]) -> ProbeResult:

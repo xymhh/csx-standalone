@@ -132,9 +132,13 @@ class HDHiveClient:
             should_stop: Optional[Callable[[], bool]] = None,
             get_data_func: Optional[Callable] = None,
             save_data_func: Optional[Callable] = None,
+            base_url: str = "",
     ):
         self._username = str(username or "").strip()
         self._password = str(password or "")
+        if str(base_url or "").strip():
+            # 站点换域名时由配置覆盖默认地址；实例属性不影响其他实例
+            self.BASE_URL = str(base_url).strip().rstrip("/")
         self._proxies = normalize_proxies(proxy)
         self._timeout = max(5, min(int(timeout or 30), 120))
         self._should_stop = should_stop
