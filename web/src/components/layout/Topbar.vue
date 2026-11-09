@@ -14,7 +14,7 @@ const transferDialogOpen = ref(false)
 
 const titles: Record<string, string> = {
   '/': '我的追剧',
-  '/discover': '探索推荐 · TMDB 榜单',
+  '/discover': '探索推荐 · 多源热播榜',
   '/search': '全网搜资源',
   '/tasks': '传输与下载',
   '/media': '媒体库与整理中心',

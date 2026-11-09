@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { Film } from '@lucide/vue'
 
 import Badge from '@/components/ui/Badge.vue'
+import { posterSrc } from '@/lib/poster'
 import type { ProgressItem } from '@/lib/api'
 
 const props = defineProps<{ media: ProgressItem }>()
@@ -40,7 +41,7 @@ const percent = computed(() => {
       <!-- 官方高清海报 -->
       <img
         v-if="media.poster_url"
-        :src="media.poster_url"
+        :src="posterSrc(media.poster_url)"
         :alt="media.title"
         loading="lazy"
         class="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"

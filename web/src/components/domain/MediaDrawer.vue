@@ -15,6 +15,7 @@ import {
 } from '@lucide/vue'
 
 import Badge from '@/components/ui/Badge.vue'
+import { posterSrc } from '@/lib/poster'
 import Button from '@/components/ui/Button.vue'
 import EpisodeMatrix from '@/components/domain/EpisodeMatrix.vue'
 import Tabs from '@/components/ui/Tabs.vue'
@@ -107,7 +108,7 @@ function copyFilePath(path: string) {
             <div class="h-40 w-28 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-zinc-900 shadow-md">
               <img
                 v-if="media.poster_url"
-                :src="media.poster_url"
+                :src="posterSrc(media.poster_url)"
                 class="h-full w-full object-cover"
               />
               <div v-else class="grid h-full w-full place-items-center text-zinc-600">

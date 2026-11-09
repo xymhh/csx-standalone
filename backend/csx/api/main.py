@@ -33,6 +33,7 @@ from csx.api.routes import (
     tg,
     tmdb,
 )
+from csx.api.routes import media as media_proxy
 from csx.application.auth import session_user
 from csx.infra.bootstrap import ensure_admin, init_db
 from csx.infra.checkin_runtime import scheduled_checkin
@@ -43,7 +44,11 @@ from csx.infra.scheduler import TaskScheduler
 from csx.infra.settings import settings
 from csx.infra.tg_worker import TgWorker
 
-PUBLIC_API_PATHS = {"/api/v1/auth/login", "/api/v1/stream/redirect"}
+PUBLIC_API_PATHS = {
+    "/api/v1/auth/login",
+    "/api/v1/stream/redirect",
+    "/api/v1/media/poster",
+}
 
 
 @asynccontextmanager
@@ -156,6 +161,7 @@ app.include_router(stream.router, prefix="/api/v1")
 app.include_router(duplicate.router, prefix="/api/v1")
 app.include_router(organize.router, prefix="/api/v1")
 app.include_router(tmdb.router, prefix="/api/v1")
+app.include_router(media_proxy.router, prefix="/api/v1")
 app.include_router(naming.router, prefix="/api/v1")
 
 

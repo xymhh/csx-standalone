@@ -7,6 +7,7 @@ import Button from '@/components/ui/Button.vue'
 import Dialog from '@/components/ui/Dialog.vue'
 import Tabs from '@/components/ui/Tabs.vue'
 import { useToast } from '@/composables/useToast'
+import { posterSrc } from '@/lib/poster'
 import { subscriptionsApi, tmdbApi, type TmdbItem } from '@/lib/api'
 
 const tabs = [
@@ -234,7 +235,7 @@ async function subscribeItem() {
         <div class="relative aspect-[2/3] w-full overflow-hidden bg-surface-2">
           <img
             v-if="item.poster_url"
-            :src="item.poster_url"
+            :src="posterSrc(item.poster_url)"
             :alt="item.title"
             loading="lazy"
             class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
