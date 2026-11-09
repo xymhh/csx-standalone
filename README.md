@@ -16,6 +16,13 @@ export CSX_DATA_DIR="$PWD/data"
 export CSX_ADMIN_PASSWORD='请设置强口令'
 export CSX_SECRET_KEY='请设置独立的长随机密钥'
 uvicorn csx.api.main:app --host 127.0.0.1 --port 8000
+```
+
+容器部署推荐把配置写进 `config.json`（见下文「配置」一节），只留一个挂载目录：
+
+```bash
+# config/config.json 里写 data_dir=/config 等配置，再：
+docker compose up -d
 
 # 前端开发服务器，另开终端
 cd web
@@ -26,7 +33,7 @@ npm run dev
 docker compose up --build -d
 ```
 
-首次启动会自动执行数据库迁移并创建管理员。若未设置 `CSX_ADMIN_PASSWORD`，随机初始口令写入 `<CSX_DATA_DIR>/initial-admin-password.txt`（权限 0600）。生产部署应使用 HTTPS 反向代理、持久化数据卷和强 `CSX_SECRET_KEY`。
+首次启动会自动执行数据库迁移并创建管理员。若未设置 `CSX_ADMIN_PASSWORD`，随机初始口令写入 `<CSX_DATA_DIR>/initial-admin-password.txt`（权限 0600）。生产部署应使用 HTTPS 反向代理、挂载 `/config` 目录持久化数据和配置，并设置强 `CSX_SECRET_KEY`。
 
 ## 功能与界面
 
@@ -37,9 +44,41 @@ docker compose up --build -d
 - 系统维护接口支持 SQLite 在线热备和备份清单；恢复可使用 CLI。
 - 后端全部测试使用离线 Fake/Mock；带 `net` 标记的真实驱动 smoke 测试默认跳过。
 
-## 环境变量速查
+## 配置
 
-应用配置由 `CSX_` 前缀的环境变量覆盖。空值代表未设置；列表型配置可按 Pydantic Settings 支持的 JSON 形式提供。
+配置优先级（高 → 低）：**环境变量（`CSX_` 前缀）→ 工作目录 `.env` → `config.json` → 代码默认值**。
+
+`config.json` 路径默认 `/config/config.json`，可用环境变量 `CSX_CONFIG_FILE` 指定。文件不存在、JSON 损坏或不是对象时静默跳过，不会阻止启动。
+
+```json
+{
+  "data_dir": "/config",
+  "web_dist": "/app/web/dist",
+  "admin_user": "admin",
+  "admin_password": "请设置强口令",
+  "secret_key": "请设置独立的长随机密钥",
+  "tmdb_api_key": "",
+  "cookie_secure": true,
+  "log_level": "INFO"
+}
+```
+
+容器部署只需挂载一个目录，配置与数据库都在里面：
+
+```yaml
+services:
+  csx-standalone:
+    image: ghcr.io/xymhh/csx-standalone:latest
+    environment:
+      CSX_CONFIG_FILE: /config/config.json
+    volumes:
+      - ./config:/config
+      - ./strm:/strm
+```
+
+### 环境变量速查
+
+环境变量仍然可用且优先级最高，适合临时覆盖。空值代表未设置；列表型配置可按 Pydantic Settings 支持的 JSON 形式提供。
 
 | 环境变量 | 默认值 | 用途 |
 | --- | --- | --- |
