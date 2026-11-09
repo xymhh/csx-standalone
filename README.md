@@ -158,6 +158,8 @@ npm run build
 - [路径拓扑与发布方式](docs/summary/2026-11-07-1panel路径拓扑与发布方式.md)
 - [目录弹窗新建文件夹验收](docs/test/2026-11-09-目录新建文件夹验收.md)
 - [路径与分层配置接通](docs/summary/2026-11-09-路径与分层接通.md)
+- [config.json 与无卷部署](docs/summary/2026-11-09-config.json与无卷部署.md)
+- [config.json 与无卷部署验收](docs/test/2026-11-09-config.json与无卷部署验收.md)
 
 ## 许可证
 
