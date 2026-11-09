@@ -103,6 +103,13 @@ class FakeDrive:
 class FakeTargetDrive(FakeDrive):
     provider = "115"
 
+    def __init__(self, files=None):
+        super().__init__(files)
+        self.remembered = []
+
+    def remember(self, file_id, item, directory):
+        self.remembered.append((file_id, directory))
+
 
 class FakeCross:
     def __init__(self, fail=False):
@@ -190,6 +197,9 @@ def test_cross_transfer_relays_files_and_records_target_provider():
     assert landed["path"].startswith("/Media")
     assert drive.deleted, "源盘中转文件应被清理"
     assert target.moved, "sidecar 应在目标盘内移动"
+    assert target.remembered == [("t-Example.S01E01.mkv", "/CSX/_inbox/cross-key")], (
+        "中继落盘的文件必须登记到目标盘，否则 115 移动/重命名会报「文件未登记」"
+    )
 
 
 def test_cross_transfer_failure_moves_task_to_retry_wait():
