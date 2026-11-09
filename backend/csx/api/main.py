@@ -27,6 +27,7 @@ from csx.api.routes import (
     organize,
     p6,
     resources,
+    search,
     sources,
     stream,
     system,
@@ -155,6 +156,7 @@ app.include_router(p6.checkin, prefix="/api/v1")
 app.include_router(p6.strm, prefix="/api/v1")
 app.include_router(system.router, prefix="/api/v1")
 app.include_router(sources.router, prefix="/api/v1")
+app.include_router(search.router, prefix="/api/v1")
 app.include_router(tg.router, prefix="/api/v1")
 app.include_router(drives.router, prefix="/api/v1")
 app.include_router(offline.router, prefix="/api/v1")

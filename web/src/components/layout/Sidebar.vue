@@ -25,6 +25,7 @@ const compact = ref(false)
 const mainLinks = [
   { path: '/', label: '我的追剧', icon: Tv },
   { path: '/discover', label: '探索推荐', icon: Compass },
+  { path: '/search', label: '搜索资源', icon: Search },
   { path: '/tasks', label: '传输与下载', icon: DownloadCloud },
   { path: '/media', label: '媒体库', icon: Film },
   { path: '/settings', label: '系统设置', icon: Settings },

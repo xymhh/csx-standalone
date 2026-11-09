@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { File, Folder, LoaderCircle, Search } from '@lucide/vue'
 
 import Dialog from '@/components/ui/Dialog.vue'
@@ -9,7 +9,16 @@ import DirectorySelectDialog from '@/components/dialogs/DirectorySelectDialog.vu
 import { useToast } from '@/composables/useToast'
 import { accountsApi, drivesApi, type Account, type ShareInspectFile } from '@/lib/api'
 
-const props = defineProps<{ open: boolean }>()
+const props = withDefaults(
+  defineProps<{
+    open: boolean
+    initialUrl?: string
+    initialPassword?: string
+    /** 打开时优先选择该网盘的账号（搜索结果里网盘类型已知） */
+    preferredProvider?: '115' | 'quark' | ''
+  }>(),
+  { initialUrl: '', initialPassword: '', preferredProvider: '' },
+)
 const emit = defineEmits<{ close: [] }>()
 const { toast } = useToast()
 const accounts = ref<Account[]>([])
@@ -25,14 +34,44 @@ const folderDialogOpen = ref(false)
 const error = ref('')
 const selectedAccount = computed(() => accounts.value.find((item) => item.id === accountId.value))
 
+function pickAccount() {
+  const preferred = props.preferredProvider
+  const matched = preferred ? accounts.value.find((item) => item.provider === preferred) : undefined
+  return matched?.id ?? accounts.value[0]?.id ?? null
+}
+
 onMounted(async () => {
   try {
     accounts.value = await accountsApi.list()
-    accountId.value = accounts.value[0]?.id ?? null
+    accountId.value = pickAccount()
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : '账号列表加载失败'
   }
 })
+
+// 从搜索结果打开时预填链接/提取码，并自动解析一次，省掉复制粘贴
+watch(
+  () => props.open,
+  async (isOpen) => {
+    if (!isOpen) return
+    error.value = ''
+    if (!accounts.value.length) {
+      try {
+        accounts.value = await accountsApi.list()
+      } catch (cause) {
+        error.value = cause instanceof Error ? cause.message : '账号列表加载失败'
+      }
+    }
+    accountId.value = pickAccount()
+    if (props.initialUrl) {
+      shareUrl.value = props.initialUrl
+      password.value = props.initialPassword
+      files.value = []
+      selectedIds.value = []
+      await inspect()
+    }
+  },
+)
 
 async function inspect() {
   if (!shareUrl.value.trim() || !selectedAccount.value) return

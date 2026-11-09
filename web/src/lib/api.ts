@@ -268,6 +268,35 @@ export const drivesApi = {
   inspectShare: (body: { provider: '115' | 'quark' | 'auto'; share_url: string; password?: string }) => api<{ provider: string; share_title: string; files: ShareInspectFile[] }>('/api/v1/drives/share/inspect', { method: 'POST', body: JSON.stringify(body) }),
   transferShare: (body: { account_id: number; share_url: string; password?: string; file_ids: string[]; target_dir: string; media_id?: number }) => api<{ task_id: number; state: string }>('/api/v1/drives/share/transfer', { method: 'POST', body: JSON.stringify(body) }),
 }
+export interface SearchSourceStatus { id: string; name: string; status: 'ok' | 'empty' | 'error' | 'timeout' | 'disabled' | 'skipped'; count: number; message: string; elapsed_ms: number }
+export interface SearchSourceOption { id: string; name: string; icon?: string; order: number; enabled: boolean }
+export interface SearchResultItem {
+  id: string
+  source: string
+  source_name: string
+  title: string
+  url: string
+  urls: string[]
+  password: string
+  resource_type: string
+  resource_type_name: string
+  size: number | null
+  size_text: string
+  update_time: string
+  description: string
+  source_url: string
+  media_page_url: string
+  fansub: string
+  needs_unlock: boolean
+  unlock_points: number
+  can_transfer: boolean
+  duplicate_of: string
+}
+export interface SearchResponse { query: string; sources: SearchSourceStatus[]; items: SearchResultItem[]; total: number; elapsed_ms: number }
+export const searchApi = {
+  sources: () => api<{ sources: SearchSourceOption[] }>('/api/v1/search/sources'),
+  run: (params: { q: string; type?: string; year?: number | null; season?: number | null; sources?: string; limit?: number }) => api<SearchResponse>(`/api/v1/search${qs(params)}`),
+}
 export const candidatesApi = {
   list: (params: PageQuery & { subscription_id?: number; state?: string } = {}) => api<Candidate[]>(`/api/v1/candidates${qs(params)}`),
   accept: (id: number) => api<{ candidate_id: number; task_id: number; state: string }>(`/api/v1/candidates/${id}/accept`, { method: 'POST' }),

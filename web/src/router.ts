@@ -25,7 +25,7 @@ const router = createRouter({
         { path: 'history', name: 'history', component: () => import('@/pages/HistoryPage.vue') },
         { path: 'media', name: 'media', component: () => import('@/pages/MediaPage.vue') },
         { path: 'settings', name: 'settings', component: () => import('@/pages/SettingsPage.vue') },
-        { path: 'search', redirect: '/discover' },
+        { path: 'search', name: 'search', component: () => import('@/pages/SearchPage.vue') },
       ],
     },
     { path: '/:pathMatch(.*)*', redirect: '/' },
