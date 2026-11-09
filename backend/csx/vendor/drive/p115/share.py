@@ -19,11 +19,19 @@ except ImportError:
     P115_AVAILABLE = False
 
 
+IOS_SHARE_USER_AGENT = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) "
+    "AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 "
+    "115wangpan_ios/36.2.20"
+)
+
+
 class ShareService(OwnerDelegator):
     """处理115分享链接及分享文件树。"""
 
     # share_iterdir 默认 page_size=10000，115 会直接返回空列表，必须显式给合理分页
     SHARE_PAGE_SIZE = 200
+    SHARE_SNAP_PAGE_SIZE = 300
 
     def extract_share_info(self, url: str) -> Dict[str, str]:
         """
@@ -261,8 +269,88 @@ class ShareService(OwnerDelegator):
             target_season=target_season,
             log_prefix=log_prefix,
         )
+        if not files and self.client:
+            files = self._walk_share_snap(share_code, receive_code, cid=int(cid or 0))
         if files:
             self._share_file_cache[cache_key] = copy.deepcopy(files)
+        return files
+
+    def _snap_list(self, share_code: str, receive_code: str, cid: int = 0, offset: int = 0):
+        """直接调 115 分享列表接口（iOS 通道）；share_iterdir 在部分分享上返回空。"""
+        payload = {
+            "share_code": share_code,
+            "receive_code": receive_code or "",
+            "cid": int(cid or 0),
+            "limit": self.SHARE_SNAP_PAGE_SIZE,
+            "offset": int(offset),
+            "asc": 1,
+            "o": "",
+        }
+        resp = self.rate_limiter.call(
+            self.client.share_snap, payload, headers={"user-agent": IOS_SHARE_USER_AGENT}
+        )
+        state = resp.get("state")
+        if not (state is True or state == 1):
+            raise RuntimeError(resp.get("error") or resp.get("message") or "115 分享列表接口返回失败")
+        data = resp.get("data") or {}
+        return list(data.get("list") or []), int(data.get("count") or 0)
+
+    def _walk_share_snap(
+        self,
+        share_code: str,
+        receive_code: str,
+        cid: int = 0,
+        depth: int = 1,
+        max_depth: int = 3,
+        parent_path: str = "",
+    ) -> List[dict]:
+        files: List[dict] = []
+        offset = 0
+        while True:
+            rows, count = self._snap_list(share_code, receive_code, cid, offset)
+            for item in rows:
+                name = str(item.get("n") or item.get("name") or item.get("file_name") or "")
+                is_dir = str(item.get("d") or item.get("is_dir") or "").strip().lower() in {
+                    "1",
+                    "true",
+                    "yes",
+                }
+                if is_dir:
+                    if depth >= max_depth:
+                        continue
+                    try:
+                        sub_cid = int(item.get("cid") or item.get("id") or item.get("fid") or 0)
+                    except (TypeError, ValueError):
+                        sub_cid = 0
+                    if sub_cid <= 0:
+                        continue
+                    sub_path = f"{parent_path}/{name}".strip("/") if parent_path else name
+                    files.extend(
+                        self._walk_share_snap(
+                            share_code,
+                            receive_code,
+                            cid=sub_cid,
+                            depth=depth + 1,
+                            max_depth=max_depth,
+                            parent_path=sub_path,
+                        )
+                    )
+                    continue
+                info = {
+                    "id": str(item.get("fid") or item.get("file_id") or item.get("id") or ""),
+                    "name": name,
+                    "size": int(item.get("s") or item.get("size") or 0),
+                    "is_dir": False,
+                    "sha1": str(item.get("sha") or item.get("sha1") or ""),
+                    "pick_code": str(item.get("pc") or item.get("pick_code") or ""),
+                }
+                if parent_path:
+                    info["parent_path"] = parent_path
+                    info["relative_path"] = f"{parent_path}/{name}"
+                files.append(info)
+            offset += self.SHARE_SNAP_PAGE_SIZE
+            if not rows or offset >= count:
+                break
         return files
 
     def resolve_share_download_link(
@@ -311,6 +399,7 @@ class ShareService(OwnerDelegator):
                 cid=int(parent_id or 0),
                 page_size=self.SHARE_PAGE_SIZE,
                 app="web",
+                headers={"user-agent": IOS_SHARE_USER_AGENT},
                 cooldown=self.rate_limiter.min_interval,
             ))
         )
@@ -351,6 +440,7 @@ class ShareService(OwnerDelegator):
                     cid=cid,
                     page_size=self.SHARE_PAGE_SIZE,
                     app="web",
+                    headers={"user-agent": IOS_SHARE_USER_AGENT},
                     cooldown=self.rate_limiter.min_interval,
                 ))
             )
