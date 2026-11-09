@@ -41,7 +41,7 @@ def get_transfer_settings(db: Session = Depends(get_db)):
             "drive_options": [
                 {
                     "value": provider,
-                    "label": _LABELS.get(provider, provider),
+                    "label": f"{_LABELS.get(provider, provider)} · {account.name}",
                     "primary": bool(getattr(account, "is_primary", False)),
                 }
                 for provider, account in accounts.items()
