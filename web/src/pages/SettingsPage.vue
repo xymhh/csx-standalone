@@ -316,6 +316,7 @@ const f = ref<Record<string, any>>({
   strm_generate_enabled: true,
   strm_mode: 'direct_302',
   strm_root: '/strm',
+  strm_public_base_url: '',
   local_mount_root: '/mnt/quark',
   strm_increment_enabled: false,
   emby_url: '',
@@ -424,6 +425,11 @@ async function loadAllSettings() {
       settingsApi.getSection('category'),
     ])
     Object.assign(f.value, b, t, s, n, a)
+    const strmSection = s as { mode?: string; public_base_url?: string }
+    if (strmSection.mode) f.value.strm_mode = strmSection.mode
+    if (strmSection.public_base_url) {
+      f.value.strm_public_base_url = String(strmSection.public_base_url)
+    }
     const channels = (n as { channels?: Record<string, Record<string, unknown>> }).channels || {}
     const feishu = channels.feishu || {}
     const telegram = channels.telegram || {}
@@ -648,6 +654,7 @@ async function saveAll() {
       strm_generate_enabled: f.value.strm_generate_enabled,
       mode: f.value.strm_mode,
       strm_root: f.value.strm_root,
+      public_base_url: f.value.strm_public_base_url,
       local_mount_root: f.value.local_mount_root,
       strm_increment_enabled: f.value.strm_increment_enabled,
       emby_url: f.value.emby_url,
@@ -2152,6 +2159,14 @@ async function exchangeHdhiveOauth() {
             <div class="space-y-1.5">
               <label class="font-medium text-white">STRM 文件输出目录</label>
               <Input v-model="f.strm_root" placeholder="/strm" />
+            </div>
+
+            <div v-if="f.strm_mode === 'direct_302'" class="space-y-1.5">
+              <label class="font-medium text-white">站点公开地址</label>
+              <Input v-model="f.strm_public_base_url" placeholder="https://csx.你的域名" />
+              <p class="text-[11px] text-zinc-500">
+                播放器访问本服务用的地址，302 跳转会拼在这后面；留空则只有手动同步能生成 STRM
+              </p>
             </div>
           </div>
         </div>
