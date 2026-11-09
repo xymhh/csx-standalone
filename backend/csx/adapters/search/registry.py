@@ -189,30 +189,110 @@ class SearchSourceAdapter:
         context = definition.build_test_context(config, {"proxy": config.get("search_proxy")})
         return definition, definition.create_client(config, context)
 
-    @staticmethod
-    def _account_card(data: dict[str, Any]) -> dict[str, Any]:
+    #: 渠道原始字段名 → 中文标签（对齐原版插件账户卡片的展示口径）
+    _DETAIL_LABELS = {
+        "level": "用户等级",
+        "points": "可用积分",
+        "signin_days": "签到天数",
+        "checkin_days": "签到天数",
+        "registered_at": "注册日期",
+        "created_at": "注册日期",
+        "expires_at": "会员到期",
+        "vip_expires_at": "会员到期",
+        "quota": "今日配额",
+        "remaining_quota": "剩余配额",
+        "quota_usage": "配额使用",
+        "account_count": "账号数量",
+        "vip_level": "VIP等级",
+        "share_count": "分享数量",
+        "upload_count": "上传资源",
+        "favorite_count": "收藏资源",
+        "unlock_count": "已解锁",
+        "invite_count": "邀请用户",
+    }
+
+    @classmethod
+    def _account_card(cls, source_id: str, data: dict[str, Any]) -> dict[str, Any]:
+        """把渠道原始账户信息整理成设置页账户卡片（对齐原版插件字段）。"""
+        info = dict(data or {})
+        badge = str(info.get("level") or info.get("role") or "").strip()
+        if badge.lower() == "vip" or info.get("is_vip"):
+            badge = "VIP"
+
+        details: list[dict[str, str]] = []
+        seen: set[str] = set()
+
+        def add_detail(label: str, value: Any) -> None:
+            if value is None or value == "" or label in seen:
+                return
+            text = str(value).strip().replace("T", " ")
+            if text.endswith("Z"):
+                text = text[:-1].strip()
+            if "." in text:
+                text = text.split(".")[0].strip()
+            if text:
+                details.append({"label": label, "value": text})
+                seen.add(label)
+
+        name = str(info.get("name") or "").strip()
+        email = str(info.get("email") or "").strip().lower()
+        if not name or "@" in name or (email and name.lower() == email):
+            definition = cls.definition(source_id)
+            channel = str(getattr(definition, "name", "") or source_id).strip()
+            name = f"{channel}用户"
+
+        if "is_vip" in info:
+            add_detail("会员状态", "VIP会员" if info.get("is_vip") else "普通用户")
+        if info.get("level_name") or info.get("level"):
+            add_detail("用户等级", info.get("level_name") or info.get("level"))
+        if info.get("retention_deadline"):
+            add_detail("保号截止", info.get("retention_deadline"))
+        if info.get("registered_at"):
+            add_detail("注册日期", info.get("registered_at"))
+        if info.get("expires_at"):
+            add_detail("会员到期", info.get("expires_at"))
+
+        days = info.get("signin_days")
+        if days is None:
+            days = info.get("checkin_days")
+        if days is None:
+            days = info.get("consecutive_signin")
+        if days is not None:
+            add_detail("签到天数", f"{days} 天" if not str(days).endswith("天") else str(days))
+
+        extra = info.get("details")
+        if isinstance(extra, dict):
+            for key, value in extra.items():
+                label = cls._DETAIL_LABELS.get(str(key).strip(), str(key).strip())
+                add_detail(label, value)
+        elif isinstance(extra, list):
+            for item in extra:
+                if isinstance(item, dict) and item.get("label") and item.get("value"):
+                    key = str(item["label"]).strip()
+                    add_detail(cls._DETAIL_LABELS.get(key, key), item["value"])
+
+        points_available = info.get("quota_text") or info.get("points") or 0
+        points_label = str(
+            info.get("points_label") or ("今日解锁配额" if info.get("quota_text") else "可用积分")
+        )
+
         return {
             "connected": True,
-            "name": str(data.get("name") or data.get("username") or ""),
-            "username": str(data.get("username") or ""),
-            "email": str(data.get("email") or ""),
-            "avatar": str(data.get("avatar") or ""),
-            "points": data.get("points"),
-            "level": str(data.get("level") or data.get("level_name") or ""),
-            "is_vip": data.get("is_vip"),
-            "extra": {
-                key: value
-                for key, value in data.items()
-                if key
-                in {
-                    "upload_count",
-                    "favorite_count",
-                    "checkin_today",
-                    "last_checkin",
-                    "user_number",
-                    "expire_at",
-                }
+            "name": name,
+            "username": str(info.get("username") or ""),
+            "email": str(info.get("email") or ""),
+            "avatar": str(info.get("avatar") or ""),
+            "level": str(info.get("level") or info.get("level_name") or ""),
+            "is_vip": info.get("is_vip"),
+            "user": {
+                "name": name,
+                "avatar": str(info.get("avatar") or ""),
+                "membership_supported": False,
+                "badge": badge,
+                "is_vip": info.get("is_vip"),
             },
+            "points": {"label": points_label, "available": points_available},
+            "details": details,
         }
 
     @classmethod
@@ -241,7 +321,7 @@ class SearchSourceAdapter:
 
         try:
             data = cls._call_with_timeout(_load, 10)
-            card = cls._account_card(dict(data or {}))
+            card = cls._account_card(source_id, dict(data or {}))
         except TimeoutError:
             card = {"connected": False, "error": "读取账户信息超时"}
         except Exception as error:

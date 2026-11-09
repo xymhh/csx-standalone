@@ -1,12 +1,23 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, type Component } from 'vue'
 import {
   Bell,
   Check,
   ChevronDown,
   ChevronRight,
+  Anchor,
   Clapperboard,
   Cloud,
+  Database,
+  Dices,
+  FileText,
+  Globe,
+  Link2,
+  MonitorPlay,
+  MessagesSquare,
+  Radar,
+  Satellite,
+  Snail,
   Cpu,
   Film,
   Flame,
@@ -14,15 +25,18 @@ import {
   FolderSync,
   HardDrive,
   Layers,
+  List,
   PlaySquare,
   Plus,
   QrCode,
+  RotateCcw,
   Radio,
   RefreshCw,
   Search,
   Send,
   Sliders,
   Sparkles,
+  Sprout,
   Trash2,
   Tv,
   Workflow,
@@ -643,6 +657,76 @@ async function testSelectedSource() {
 }
 
 const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === selectedSourceId.value))
+const currentAccount = computed(() => sourceMeta.value.accounts[selectedSourceId.value] || null)
+const sourceMenuOpen = ref(false)
+const collapsedGroups = ref<Record<string, boolean>>({})
+
+const SOURCE_ICONS: Record<string, Component> = {
+  pansou: Radar,
+  hdhive: Dices,
+  hdhaven: Clapperboard,
+  dian115: Film,
+  juying: MonitorPlay,
+  woniu: Snail,
+  pinglian: Link2,
+  mikan: Sparkles,
+  animegarden: Sprout,
+  seedhub: Sprout,
+  tgchannels: MessagesSquare,
+  piratebay: Anchor,
+  pianku: Database,
+  uindex: Globe,
+  online_docs: FileText,
+}
+
+function sourceIcon(sourceId: string) {
+  return SOURCE_ICONS[sourceId] || Satellite
+}
+
+const visibleSourceTabs = computed(() => sourceSchemas.value.slice(0, 4))
+const hiddenSourceTabs = computed(() => sourceSchemas.value.slice(4))
+
+function pickSource(sourceId: string) {
+  selectedSourceId.value = sourceId
+  sourceTest.value = null
+  sourceMenuOpen.value = false
+}
+
+function toggleGroup(key: string) {
+  collapsedGroups.value = { ...collapsedGroups.value, [key]: !collapsedGroups.value[key] }
+}
+
+function isGroupCollapsed(key: string): boolean {
+  return Boolean(collapsedGroups.value[key])
+}
+
+function restoreSourceDefaults() {
+  const source = currentSource.value
+  if (!source) return
+  const values = { ...(sourceValues.value[source.id] || {}) }
+  for (const group of source.groups) {
+    for (const field of group.fields) {
+      if (field.default !== undefined && field.key && !['account', 'test'].some((t) => (field.type || '').includes(t))) {
+        values[field.key] = field.default
+      }
+    }
+  }
+  sourceValues.value[source.id] = values
+  toast(`${source.name} 已恢复为默认值，记得点「保存配置」`, 'success')
+}
+
+function accountPoints(card: { points?: unknown } | null): string {
+  const points = card?.points
+  const raw = points && typeof points === 'object' ? (points as { available?: unknown }).available : points
+  const value = Number(raw)
+  if (!Number.isFinite(value)) return ''
+  return value.toLocaleString('zh-CN')
+}
+
+function accountPointsLabel(card: { points?: unknown } | null): string {
+  const points = card?.points
+  return points && typeof points === 'object' ? String((points as { label?: string }).label || '可用积分') : '可用积分'
+}
 
 async function loadSearchProxy() {
   try {
@@ -1329,30 +1413,58 @@ async function exchangeHdhiveOauth() {
       </div>
     </div>
 
-    <!-- 4. 搜索渠道 (15 源：横向可滚动选项栏) -->
-    <div v-else-if="currentNav === 'sources'" class="space-y-4">
-      <!-- 核心改变：水平滚动单行选项导航栏 -->
-      <div class="apple-glass rounded-2xl p-2.5">
-        <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+    <!-- 4. 搜索渠道（对齐原版插件：药丸标签 + 账户卡片 + 行式字段 + 底部保存） -->
+    <div v-else-if="currentNav === 'sources'" class="space-y-4 pb-24">
+      <!-- 渠道切换栏 -->
+      <div class="apple-glass relative rounded-2xl px-2 py-2">
+        <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
           <button
-            v-for="s in sourceSchemas"
+            v-for="s in visibleSourceTabs"
             :key="s.id"
             type="button"
-            class="flex items-center gap-1.5 shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer whitespace-nowrap"
-            :class="selectedSourceId === s.id ? 'bg-white/15 text-white ring-1 ring-white/20' : 'text-zinc-400 hover:text-white hover:bg-white/[0.05]'"
-            @click="selectedSourceId = s.id; sourceTest = null"
+            class="flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all cursor-pointer whitespace-nowrap"
+            :class="selectedSourceId === s.id ? 'bg-white/15 text-white ring-1 ring-white/20' : 'text-zinc-400 hover:bg-white/[0.05] hover:text-white'"
+            @click="pickSource(s.id)"
           >
+            <component :is="sourceIcon(s.id)" class="h-3.5 w-3.5 shrink-0" />
             <span>{{ s.name }}</span>
             <span
               class="h-1.5 w-1.5 rounded-full"
               :class="sourceValues[s.id]?.enabled === false ? 'bg-zinc-600' : 'bg-emerald-400'"
             />
           </button>
+          <button
+            v-if="hiddenSourceTabs.length"
+            type="button"
+            class="flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-zinc-400 transition-all hover:bg-white/[0.05] hover:text-white cursor-pointer whitespace-nowrap"
+            :class="hiddenSourceTabs.some((s) => s.id === selectedSourceId) ? 'bg-white/15 text-white ring-1 ring-white/20' : ''"
+            @click="sourceMenuOpen = !sourceMenuOpen"
+          >
+            <List class="h-3.5 w-3.5 shrink-0" />
+            <span>更多 ({{ sourceSchemas.length }})</span>
+          </button>
+        </div>
+        <div
+          v-if="sourceMenuOpen"
+          class="absolute left-2 right-2 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-xl border border-white/10 bg-[#141416]/95 p-1.5 shadow-2xl backdrop-blur-xl"
+        >
+          <button
+            v-for="s in sourceSchemas"
+            :key="s.id"
+            type="button"
+            class="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-zinc-300 hover:bg-white/[0.06] cursor-pointer"
+            :class="selectedSourceId === s.id ? 'text-white' : ''"
+            @click="pickSource(s.id)"
+          >
+            <component :is="sourceIcon(s.id)" class="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+            <span class="flex-1 text-left">{{ s.name }}</span>
+            <Check v-if="selectedSourceId === s.id" class="h-3.5 w-3.5 text-emerald-400" />
+          </button>
         </div>
       </div>
 
       <!-- 全局网络：搜索代理 -->
-      <div class="apple-glass rounded-2xl px-4 py-3 flex flex-wrap items-center gap-3">
+      <div class="apple-glass flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3">
         <div class="min-w-[140px]">
           <p class="text-xs font-medium text-white">搜索代理</p>
           <p class="text-[11px] text-zinc-500">HDHive、UIndex 被 Cloudflare 拦截时填写</p>
@@ -1360,58 +1472,123 @@ async function exchangeHdhiveOauth() {
         <Input
           v-model="searchProxy"
           placeholder="http://127.0.0.1:7890 或 socks5h://user:pass@host:1080"
-          class="h-9 flex-1 min-w-[220px] text-xs"
+          class="h-9 min-w-[220px] flex-1 text-xs"
         />
-        <Button variant="outline" size="sm" class="h-9 text-xs shrink-0" :disabled="searchProxySaving" @click="saveSearchProxy">
+        <Button variant="outline" size="sm" class="h-9 shrink-0 text-xs" :disabled="searchProxySaving" @click="saveSearchProxy">
           {{ searchProxySaving ? '保存中…' : '保存' }}
         </Button>
       </div>
 
-      <!-- 选中源的参数配置卡片 -->
-      <div v-if="currentSource" class="space-y-4">
-        <div class="apple-glass rounded-2xl p-4 flex items-center justify-between gap-4">
-          <div>
-            <div class="flex items-center gap-2">
-              <h4 class="text-sm font-semibold text-white">{{ currentSource.name }}</h4>
-              <Badge tone="muted" class="text-[10px]">权重 {{ currentSource.order }}</Badge>
-            </div>
-            <p class="text-xs text-zinc-400 mt-0.5">自描述参数调整与在线网络测试</p>
+      <div v-if="currentSource" class="apple-glass overflow-hidden rounded-2xl">
+        <!-- 渠道标题 -->
+        <div class="flex items-center justify-between gap-3 px-4 py-3">
+          <div class="flex min-w-0 items-center gap-2">
+            <component :is="sourceIcon(currentSource.id)" class="h-4 w-4 shrink-0 text-emerald-400" />
+            <h4 class="truncate text-sm font-semibold text-white">{{ currentSource.name }}</h4>
           </div>
-
-          <Button variant="outline" size="sm" class="h-8 text-xs shrink-0" :disabled="sourceTestRunning" @click="testSelectedSource">
-            <Search class="mr-1.5 h-3.5 w-3.5" />
-            <span>{{ sourceTestRunning ? '测试中…' : '测试连通性' }}</span>
-          </Button>
+          <div class="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              class="flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-[11px] text-zinc-400 hover:border-white/25 hover:text-white cursor-pointer"
+              :disabled="sourceTestRunning"
+              @click="testSelectedSource"
+            >
+              <Search class="h-3 w-3" />
+              {{ sourceTestRunning ? '测试中…' : '测试' }}
+            </button>
+            <button
+              type="button"
+              class="flex items-center gap-1 rounded-lg border border-rose-500/25 px-2 py-1 text-[11px] text-rose-300 hover:bg-rose-500/10 cursor-pointer"
+              @click="restoreSourceDefaults"
+            >
+              <RotateCcw class="h-3 w-3" />
+              恢复默认值
+            </button>
+          </div>
         </div>
 
+        <!-- 账户卡片 -->
+        <div v-if="currentAccount" class="flex items-start gap-3 border-t border-white/[0.06] px-4 py-3.5">
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/[0.06]">
+            <img v-if="currentAccount.user?.avatar" :src="currentAccount.user.avatar" class="h-full w-full object-cover" alt="" />
+            <component :is="sourceIcon(currentSource.id)" v-else class="h-4 w-4 text-zinc-500" />
+          </div>
+          <div class="min-w-0 flex-1 space-y-1.5">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span class="truncate text-sm font-medium text-white">
+                {{ currentAccount.connected ? currentAccount.user?.name || currentAccount.name || '未知用户' : '账号未连接' }}
+              </span>
+              <span
+                v-if="currentAccount.connected && currentAccount.user?.badge"
+                class="rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-300"
+              >{{ currentAccount.user.badge }}</span>
+              <span
+                v-if="currentAccount.connected && accountPoints(currentAccount)"
+                class="rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-zinc-300"
+              >{{ accountPointsLabel(currentAccount) }} {{ accountPoints(currentAccount) }}</span>
+            </div>
+            <div v-if="currentAccount.connected && currentAccount.details?.length" class="flex flex-wrap gap-1.5">
+              <span
+                v-for="item in currentAccount.details"
+                :key="item.label"
+                class="rounded-md bg-white/[0.05] px-1.5 py-0.5 text-[10px] text-zinc-400"
+              >{{ item.label }}：<span class="text-zinc-200">{{ item.value }}</span></span>
+            </div>
+            <p v-if="!currentAccount.connected" class="text-[11px] leading-relaxed text-amber-400">
+              {{ currentAccount.error || '请填写登录凭证并保存配置' }}
+            </p>
+          </div>
+          <button
+            type="button"
+            class="shrink-0 p-1.5 text-zinc-500 hover:text-emerald-400 cursor-pointer"
+            title="刷新账户信息"
+            @click="refreshSourceAccount(currentSource.id)"
+          >
+            <RefreshCw class="h-3.5 w-3.5" :class="sourceAccountRefreshing ? 'animate-spin' : ''" />
+          </button>
+        </div>
+
+        <!-- 连通性结果 -->
         <div
           v-if="sourceTest"
-          class="rounded-xl border p-3 text-xs flex items-center justify-between"
+          class="mx-4 my-2 flex items-center justify-between rounded-xl border px-3 py-2 text-[11px]"
           :class="sourceTest.valid ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-rose-500/30 bg-rose-500/10 text-rose-400'"
         >
-          <span>{{ sourceTest.valid ? '连通正常' : '连通失败' }}：{{ sourceTest.message }}</span>
-          <span class="font-mono text-[11px]">{{ sourceTest.elapsed_ms }} ms</span>
+          <span class="truncate">{{ sourceTest.valid ? '连通正常' : '连通失败' }}：{{ sourceTest.message }}</span>
+          <span class="ml-2 shrink-0 font-mono text-[11px]">{{ sourceTest.elapsed_ms }} ms</span>
         </div>
 
-        <div v-for="(group, gIndex) in currentSource.groups" :key="gIndex" class="apple-glass rounded-2xl p-5 space-y-4">
-          <h5 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">{{ group.title || '参数配置' }}</h5>
-          <div class="grid grid-cols-12 gap-3">
-            <template v-for="field in group.fields" :key="field.key">
-              <div v-if="sourceFieldVisible(field)" :class="sourceFieldCols(field)" class="space-y-1.5 text-xs">
-                <label v-if="field.label" class="flex items-center gap-1.5 font-medium text-white">
-                  <span>{{ field.label }}</span>
-                  <button
-                    v-if="field.dynamicOptions?.refreshable"
-                    type="button"
-                    class="text-[10px] font-normal text-zinc-500 hover:text-emerald-400 cursor-pointer"
-                    @click="refreshSourceOptions(field)"
-                  >
-                    刷新
-                  </button>
-                </label>
-                <p v-if="field.hint || field.description" class="text-[11px] leading-relaxed text-zinc-500">
+        <!-- 参数分组 -->
+        <section
+          v-for="group in currentSource.groups"
+          :key="group.title || 'default'"
+          class="border-t border-white/[0.06]"
+        >
+          <button
+            type="button"
+            class="flex w-full items-center gap-2 px-4 py-2.5 text-left cursor-pointer"
+            @click="toggleGroup(group.title || 'default')"
+          >
+            <ChevronDown
+              class="h-3.5 w-3.5 shrink-0 text-zinc-500 transition-transform"
+              :class="isGroupCollapsed(group.title || 'default') ? '-rotate-90' : ''"
+            />
+            <span class="text-xs font-semibold text-zinc-300">{{ group.title || '参数配置' }}</span>
+          </button>
+          <div v-show="!isGroupCollapsed(group.title || 'default')">
+            <div
+              v-for="field in group.fields"
+              :key="field.key"
+              v-show="sourceFieldVisible(field) && field.type !== 'account' && !String(field.type || '').startsWith('test')"
+              class="flex items-start gap-4 border-t border-white/[0.04] px-4 py-3 text-xs"
+            >
+              <div class="w-[36%] min-w-[104px] shrink-0">
+                <p class="leading-5 font-medium text-white">{{ field.label }}</p>
+                <p v-if="field.hint || field.description" class="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
                   {{ field.hint || field.description }}
                 </p>
+              </div>
+              <div class="min-w-0 flex-1">
                 <SearchSourceField
                   :field="field"
                   :model-value="sourceValues[currentSource.id][field.key]"
@@ -1429,8 +1606,20 @@ async function exchangeHdhiveOauth() {
                   @oauth-exchange="exchangeHdhiveOauth()"
                 />
               </div>
-            </template>
+            </div>
           </div>
+        </section>
+      </div>
+
+      <!-- 底部保存 -->
+      <div class="sticky bottom-4 z-20">
+        <div class="apple-glass flex items-center justify-between gap-3 rounded-2xl px-3 py-2.5 shadow-xl">
+          <p class="text-[11px] text-zinc-500">
+            共 {{ sourceSchemas.length }} 个渠道 · 当前 {{ currentSource?.name || '—' }}
+          </p>
+          <Button size="sm" class="apple-btn-primary px-4 text-xs" :disabled="saving" @click="saveAll">
+            {{ saving ? '保存中…' : '保存配置' }}
+          </Button>
         </div>
       </div>
     </div>

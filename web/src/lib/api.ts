@@ -132,15 +132,20 @@ export interface SearchSourceGroup { title: string; fields: SearchSourceField[] 
 export interface SearchSourceSchema { id: string; name: string; order: number; enabled?: boolean; groups: SearchSourceGroup[] }
 export interface SearchSourceTest { valid: boolean; elapsed_ms: number; message: string }
 export interface SourceOption { title: string; value: string }
+export interface SourceAccountDetail { label: string; value: string }
 export interface SourceAccountCard {
   connected?: boolean
   name?: string
   username?: string
   email?: string
-  points?: number | null
+  avatar?: string
+  points?: { label?: string; available?: number | string } | number | null
   level?: string
+  is_vip?: boolean
   error?: string
   extra?: Record<string, unknown>
+  user?: { name?: string; avatar?: string; badge?: string; is_vip?: boolean; membership_supported?: boolean }
+  details?: SourceAccountDetail[]
 }
 export interface SourceMeta {
   accounts: Record<string, SourceAccountCard>

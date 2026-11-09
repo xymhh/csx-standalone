@@ -34,9 +34,13 @@ export type AccountCard = {
   name?: string
   username?: string
   email?: string
-  points?: number | null
+  avatar?: string
+  points?: { label?: string; available?: number | string } | number | null
   level?: string
+  is_vip?: boolean
   error?: string
+  user?: { name?: string; avatar?: string; badge?: string; is_vip?: boolean; membership_supported?: boolean }
+  details?: { label: string; value: string }[]
 }
 
 const props = withDefaults(
