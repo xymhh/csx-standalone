@@ -34,6 +34,13 @@ class ShareService(OwnerDelegator):
     SHARE_PAGE_SIZE = 200
     SHARE_SNAP_PAGE_SIZE = 20
 
+    def _require_dict(self, resp: Any, action: str) -> Dict[str, Any]:
+        """115 偶发返回纯文本（风控/HTML），直接 .get 会抛 AttributeError，这里转成可读错误。"""
+        if isinstance(resp, dict):
+            return resp
+        text = str(resp)[:300].replace("\n", " ")
+        raise RuntimeError(f"115 {action} 返回非预期内容（可能触发风控或登录失效）：{text}")
+
     def extract_share_info(self, url: str) -> Dict[str, str]:
         """
         解析分享链接，获取 share_code 和 receive_code（带缓存）
@@ -142,6 +149,7 @@ class ShareService(OwnerDelegator):
             )
 
             # 检查响应状态
+            resp = self._require_dict(resp, "分享校验")
             state = resp.get("state")
 
             if state is True or state == 1:
@@ -320,6 +328,7 @@ class ShareService(OwnerDelegator):
         resp = self.rate_limiter.call(
             self.client.share_snap, payload, headers={"user-agent": IOS_SHARE_USER_AGENT}
         )
+        resp = self._require_dict(resp, "分享列表")
         state = resp.get("state")
         if not (state is True or state == 1):
             raise RuntimeError(resp.get("error") or resp.get("message") or "115 分享列表接口返回失败")
@@ -948,6 +957,7 @@ class ShareService(OwnerDelegator):
                     **self._ios_request_kwargs(app=False),
                 )
 
+                resp = self._require_dict(resp, "转存")
                 if resp.get("state"):
                     if file_id == "0":
                         logger.debug(f"115 转存完成：{save_path}")
