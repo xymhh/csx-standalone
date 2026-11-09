@@ -62,6 +62,7 @@ class P115DriveAdapter:
         out["client_type"] = type(client).__name__
         code, rcv = share.resolve_share_codes(url)
         out["codes"] = f"{code!r}/{rcv!r}"
+        out["extract_debug"] = str(getattr(share, "last_extract_debug", "") or "")
         if client and code:
             payload = {"share_code": code, "receive_code": rcv, "cid": 0, "limit": 5, "offset": 0}
             for label, kwargs in (

@@ -52,17 +52,20 @@ class ShareService(OwnerDelegator):
         try:
             payload = share_extract_payload(url)
             # p115client 不同版本返回 dict 或 (share_code, receive_code) 元组
+            self.last_extract_debug = f"type={type(payload).__name__} repr={payload!r}"[:200]
             if isinstance(payload, dict):
                 result = {
                     "share_code": payload.get("share_code", ""),
                     "receive_code": payload.get("receive_code", ""),
                 }
-            else:
-                seq = list(payload or [])
+            elif isinstance(payload, (tuple, list)) and len(payload) >= 2:
                 result = {
-                    "share_code": str(seq[0]) if len(seq) > 0 else "",
-                    "receive_code": str(seq[1]) if len(seq) > 1 else "",
+                    "share_code": str(payload[0] or ""),
+                    "receive_code": str(payload[1] or ""),
                 }
+            else:
+                # 无法识别的返回形态，交给调用方正则兜底
+                return {}
             self._share_info_cache[url] = result
             return result
         except Exception as e:
