@@ -22,6 +22,9 @@ except ImportError:
 class ShareService(OwnerDelegator):
     """处理115分享链接及分享文件树。"""
 
+    # share_iterdir 默认 page_size=10000，115 会直接返回空列表，必须显式给合理分页
+    SHARE_PAGE_SIZE = 200
+
     def extract_share_info(self, url: str) -> Dict[str, str]:
         """
         解析分享链接，获取 share_code 和 receive_code（带缓存）
@@ -306,6 +309,7 @@ class ShareService(OwnerDelegator):
                 share_code=share_code,
                 receive_code=receive_code,
                 cid=int(parent_id or 0),
+                page_size=self.SHARE_PAGE_SIZE,
                 app="web",
                 cooldown=self.rate_limiter.min_interval,
             ))
@@ -345,6 +349,7 @@ class ShareService(OwnerDelegator):
                     share_code=share_code,
                     receive_code=receive_code,
                     cid=cid,
+                    page_size=self.SHARE_PAGE_SIZE,
                     app="web",
                     cooldown=self.rate_limiter.min_interval,
                 ))
