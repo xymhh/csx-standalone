@@ -108,6 +108,8 @@ const sourceAccountRefreshing = ref(false)
 const sourceOauthBusy = ref<'' | 'start' | 'exchange'>('')
 const sourceOauthCallback = ref('')
 const pansouMeta = ref<{ channels: { title: string; value: string }[]; plugins: { title: string; value: string }[]; status?: string }>({ channels: [], plugins: [] })
+const searchProxy = ref('')
+const searchProxySaving = ref(false)
 
 // 表单全量响应式字段
 const f = ref<Record<string, any>>({
@@ -345,6 +347,7 @@ onMounted(() => {
   void loadAllSettings()
   void loadSources()
   void loadSourceMeta()
+  void loadSearchProxy()
   void loadNaming()
 })
 
@@ -640,6 +643,28 @@ async function testSelectedSource() {
 }
 
 const currentSource = computed(() => sourceSchemas.value.find((s) => s.id === selectedSourceId.value))
+
+async function loadSearchProxy() {
+  try {
+    const result = await searchSourcesApi.getGlobal()
+    searchProxy.value = result.search_proxy || ''
+  } catch {
+    // 忽略
+  }
+}
+
+async function saveSearchProxy() {
+  searchProxySaving.value = true
+  try {
+    const result = await searchSourcesApi.saveGlobal({ search_proxy: searchProxy.value.trim() })
+    searchProxy.value = result.search_proxy
+    toast(result.search_proxy ? '搜索代理已保存' : '搜索代理已清空', 'success')
+  } catch (cause) {
+    toast(cause instanceof Error ? cause.message : '保存搜索代理失败', 'error')
+  } finally {
+    searchProxySaving.value = false
+  }
+}
 
 async function loadSourceMeta() {
   sourceMetaLoading.value = true
@@ -1324,6 +1349,22 @@ async function exchangeHdhiveOauth() {
             />
           </button>
         </div>
+      </div>
+
+      <!-- 全局网络：搜索代理 -->
+      <div class="apple-glass rounded-2xl px-4 py-3 flex flex-wrap items-center gap-3">
+        <div class="min-w-[140px]">
+          <p class="text-xs font-medium text-white">搜索代理</p>
+          <p class="text-[11px] text-zinc-500">HDHive、UIndex 被 Cloudflare 拦截时填写</p>
+        </div>
+        <Input
+          v-model="searchProxy"
+          placeholder="http://127.0.0.1:7890 或 socks5h://user:pass@host:1080"
+          class="h-9 flex-1 min-w-[220px] text-xs"
+        />
+        <Button variant="outline" size="sm" class="h-9 text-xs shrink-0" :disabled="searchProxySaving" @click="saveSearchProxy">
+          {{ searchProxySaving ? '保存中…' : '保存' }}
+        </Button>
       </div>
 
       <!-- 选中源的参数配置卡片 -->

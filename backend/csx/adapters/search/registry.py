@@ -99,7 +99,7 @@ class SearchSourceAdapter:
 
     @staticmethod
     def _probe(definition: type, config: dict[str, Any]) -> tuple[bool, str]:
-        context = definition.build_test_context(config, {})
+        context = definition.build_test_context(config, {"proxy": config.get("search_proxy")})
         client = definition.create_client(config, context)
         if client is None:
             return False, "请先填写该搜索源所需的连接信息"
@@ -141,14 +141,21 @@ class SearchSourceAdapter:
         definition = next((item for item in cls.definitions() if item.id == source_id), None)
         if definition is None:
             raise KeyError(source_id)
+        from csx.adapters.search import probes
+
         started = time.monotonic()
         pool = ThreadPoolExecutor(max_workers=1)
-        future = pool.submit(cls._probe, definition, config)
+        if probes.has_probe(source_id):
+            future = pool.submit(probes.probe, source_id, config)
+            budget = 30
+        else:
+            future = pool.submit(cls._probe, definition, config)
+            budget = 15
         try:
-            valid, message = future.result(timeout=10)
+            valid, message = future.result(timeout=budget)
         except TimeoutError:
             future.cancel()
-            valid, message = False, "测试超时（10 秒）"
+            valid, message = False, f"测试超时（{budget} 秒）"
         except Exception as error:
             valid, message = False, str(error) or "搜索源测试失败"
         finally:
@@ -179,7 +186,7 @@ class SearchSourceAdapter:
         definition = cls.definition(source_id)
         if definition is None:
             raise KeyError(source_id)
-        context = definition.build_test_context(config, {})
+        context = definition.build_test_context(config, {"proxy": config.get("search_proxy")})
         return definition, definition.create_client(config, context)
 
     @staticmethod

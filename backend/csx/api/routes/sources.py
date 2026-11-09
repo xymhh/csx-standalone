@@ -7,6 +7,7 @@ All routes are mounted beneath ``/api/v1`` and protected by ``auth_guard`` in
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -46,6 +47,44 @@ def _vendor_config(saved: dict[str, Any]) -> dict[str, Any]:
         if isinstance(source_values, dict):
             config.update(source_values)
     return config
+
+
+_PROXY_RE = re.compile(r"^(https?|socks5h?)://[^\s]+$", re.IGNORECASE)
+
+
+def _upsert_setting(db: Session, key: str, value: str) -> None:
+    row = db.get(Setting, key)
+    if row is None:
+        db.add(Setting(key=key, value=value))
+    else:
+        row.value = value
+        row.updated_at = datetime.now(UTC)
+    db.commit()
+
+
+@router.get("/global")
+def get_global_settings(db: Session = Depends(get_db)):
+    """搜索渠道的全局网络设置（当前只有代理）。"""
+    saved = _saved_sources(db).get("global") or {}
+    if not isinstance(saved, dict):
+        saved = {}
+    return ok({"search_proxy": str(saved.get("search_proxy") or "")})
+
+
+@router.post("/global")
+def save_global_settings(body: dict[str, Any], db: Session = Depends(get_db)):
+    proxy = str((body or {}).get("search_proxy") or "").strip()
+    if proxy and not _PROXY_RE.match(proxy):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "INVALID_PROXY",
+                "message": "代理地址格式应为 http://host:port、https://… 或 socks5h://…",
+            },
+        )
+    payload = json.dumps({"search_proxy": proxy}, ensure_ascii=False)
+    _upsert_setting(db, "sources.global", payload)
+    return ok({"search_proxy": proxy})
 
 
 @router.get("/schema")

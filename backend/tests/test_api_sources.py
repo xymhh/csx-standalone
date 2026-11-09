@@ -154,3 +154,20 @@ def test_hdhive_oauth_exchange_rejects_unknown_state(client):
     )
     assert response.status_code == 422
     assert "state" in response.json()["error"]["message"]
+
+
+def test_global_search_proxy_settings_roundtrip(client):
+    login(client)
+    assert client.get("/api/v1/settings/sources/global").json()["data"]["search_proxy"] == ""
+    bad = client.post("/api/v1/settings/sources/global", json={"search_proxy": "127.0.0.1:7890"})
+    assert bad.status_code == 422
+    ok_response = client.post(
+        "/api/v1/settings/sources/global",
+        json={"search_proxy": "socks5h://user:pass@127.0.0.1:1080"},
+    )
+    assert ok_response.status_code == 200
+    saved = client.get("/api/v1/settings/sources/global").json()["data"]["search_proxy"]
+    assert saved == "socks5h://user:pass@127.0.0.1:1080"
+    assert (
+        client.post("/api/v1/settings/sources/global", json={"search_proxy": ""}).status_code == 200
+    )
