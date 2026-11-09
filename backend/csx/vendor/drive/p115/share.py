@@ -277,6 +277,7 @@ class ShareService(OwnerDelegator):
             logger.error(f"{prefix}无效的分享链接或解析失败")
             return []
 
+        self._share_list_incomplete = False
         files = self._list_share_files_recursive(
             share_code=share_code,
             receive_code=receive_code,
@@ -290,7 +291,8 @@ class ShareService(OwnerDelegator):
             files = self._walk_share_snap(share_code, receive_code, cid=int(cid or 0))
             if not files and not self.last_list_error:
                 self.last_list_error = str(getattr(self, "last_snap_debug", "") or "")
-        if files:
+        if files and not self._share_list_incomplete:
+            # 部分结果（子目录失败/限流）不能缓存，否则不完整列表会被固化
             self._share_file_cache[cache_key] = copy.deepcopy(files)
         return files
 
@@ -473,6 +475,8 @@ class ShareService(OwnerDelegator):
 
         files = []
         self.last_list_error = ""
+        if not hasattr(self, "_share_list_incomplete"):
+            self._share_list_incomplete = False
         self.last_iter_debug = ""
         try:
             raw = self.rate_limiter.call(
@@ -489,10 +493,14 @@ class ShareService(OwnerDelegator):
             )
             if isinstance(raw, str):
                 # 115 风控时会返回纯文本而非列表，直接 list() 会把字符当条目
+                self._share_list_incomplete = True
                 self.last_list_error = f"share_iterdir 返回文本：{raw[:200]}"
                 logger.error(f"{log_prefix} {self.last_list_error}".strip())
                 raw = []
-            rows = [row for row in list(raw or []) if isinstance(row, dict)]
+            raw_rows = list(raw or [])
+            rows = [row for row in raw_rows if isinstance(row, dict)]
+            if len(rows) != len(raw_rows):
+                self._share_list_incomplete = True
             self.last_iter_debug = f"cid={cid} raw={type(raw).__name__} rows={len(rows)}"
 
             for item in rows:
@@ -546,6 +554,7 @@ class ShareService(OwnerDelegator):
         except Exception as e:
             prefix = f"{log_prefix} " if log_prefix else ""
             logger.error(f"{prefix}列出分享文件失败：{e}")
+            self._share_list_incomplete = True
             self.last_list_error = f"{prefix}{e}".strip()
 
         return files

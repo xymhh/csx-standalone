@@ -199,9 +199,11 @@ class _PlatformTTLCache(TTLCache):
         return cached
 
     def __setitem__(self, key: Any, value: Any) -> None:
+        # 必须直接调用基类 set：TTLCache.__setitem__ 会回调 self.set，
+        # 动态分派回本类的 set 后会把已编码的 payload 再编码一次。
         payload, ok = self._write_value(value)
         if ok:
-            super().__setitem__(self._key(key), payload)
+            TTLCache.set(self, self._key(key), payload)
 
     def __delitem__(self, key: Any) -> None:
         super().__delitem__(self._key(key))

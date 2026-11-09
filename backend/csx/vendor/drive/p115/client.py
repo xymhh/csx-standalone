@@ -20,7 +20,6 @@ from .upload import P115UploadService
 from ..common import DriveRateLimiter, create_directory_path_cache
 from ...core import get_component, resolve_component
 from ...utils.cache import create_platform_ttl_cache
-from ...utils.memory_cache import InMemoryTTLCache
 
 try:
     from p115client import P115Client, check_response
@@ -296,15 +295,23 @@ class P115ClientManager:
         self._share_cache_ttl = max(60, int(share_cache_ttl_minutes or 30) * 60)
         self._share_status_cache_limit = 500
         self._share_file_cache_limit = 300
-        # 分享状态与文件列表必须原样保留结构，平台缓存会序列化后破坏 dict 列表
-        self._share_info_cache = InMemoryTTLCache(
-            maxsize=self._share_info_cache_limit, ttl=self._share_cache_ttl
+        self._share_info_cache = create_platform_ttl_cache(
+            "p115:share_info",
+            cache_scope,
+            maxsize=self._share_info_cache_limit,
+            ttl=self._share_cache_ttl,
         )
-        self._share_status_cache = InMemoryTTLCache(
-            maxsize=self._share_status_cache_limit, ttl=self._share_cache_ttl
+        self._share_status_cache = create_platform_ttl_cache(
+            "p115:share_status",
+            cache_scope,
+            maxsize=self._share_status_cache_limit,
+            ttl=self._share_cache_ttl,
         )
-        self._share_file_cache = InMemoryTTLCache(
-            maxsize=self._share_file_cache_limit, ttl=max(self._share_cache_ttl, 24 * 60 * 60)
+        self._share_file_cache = create_platform_ttl_cache(
+            "p115:share_files",
+            cache_scope,
+            maxsize=self._share_file_cache_limit,
+            ttl=max(self._share_cache_ttl, 24 * 60 * 60),
         )
         self._share_cache_lock = threading.RLock()
         self._offline_task_cache: List[Dict[str, Any]] = []

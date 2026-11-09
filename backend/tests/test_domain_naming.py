@@ -78,3 +78,14 @@ def test_naming_tv_movie_variety_quality_and_cleaning():
     )
     folder, filename = build_media_paths("x" * 240, "movie", None, None, None, "sd", "mkv", "movie")
     assert len(folder) <= 200 and len(filename) <= 200
+
+
+def test_numeric_stem_without_extension_is_episode():
+    # organize_scan 传的是 stem，"10" 必须仍能识别为第 10 集
+    assert parse_episode_from_name("10") == (None, 10)
+
+
+def test_year_and_resolution_are_not_episodes():
+    assert parse_episode_from_name("2024.mkv") == (None, None)
+    assert parse_episode_from_name("1080p.mkv") == (None, None)
+    assert parse_episode_from_name("2160.mkv") == (None, None)

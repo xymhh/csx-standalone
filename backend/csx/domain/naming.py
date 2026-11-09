@@ -26,8 +26,8 @@ DEFAULT_TV_TEMPLATE = (
 MAX_TEMPLATE_LENGTH = 512
 _EPISODE_PATTERNS = (
     re.compile(r"(?i)S(?P<season>\d{1,3})[ ._-]*E(?:P)?[ ._-]*(?P<episode>\d{1,4})\b"),
-    # 纯数字文件名：中文剧集分享常见 "10.mkv" / "第10集.mkv"
-    re.compile(r"^\s*0*(?P<episode>\d{1,4})\s*\.(?:mkv|mp4|ts|avi|rmvb|flv|mov|wmv)\s*$"),
+    # 纯数字文件名：中文剧集分享常见 "10.mkv" / "第10集.mkv" / stem "10"
+    re.compile(r"^\s*0*(?P<episode>\d{1,4})\s*(\.(?:mkv|mp4|ts|avi|rmvb|flv|mov|wmv))?\s*$"),
     re.compile(r"(?i)\bE(?:P)?[ ._-]*(?P<episode>\d{1,4})\b"),
     re.compile(r"(?i)\bEPISODE[ ._-]*(?P<episode>\d{1,4})\b"),
     re.compile(r"第\s*(?P<season>\d{1,3})\s*季\s*第\s*(?P<episode>\d{1,4})\s*集"),
@@ -41,6 +41,14 @@ def _clean(value: str) -> str:
     return cleaned.strip(" .")[:200].rstrip(" .")
 
 
+# 纯数字 stem 里这些值不是集数：年份与常见分辨率
+_NON_EPISODE_NUMBERS = {480, 576, 720, 1080, 1440, 2160, 4320}
+
+
+def _looks_like_year(value: int) -> bool:
+    return 1900 <= value <= 2100
+
+
 def parse_episode_from_name(text: str) -> tuple[int | None, int | None]:
     """Parse season and episode from common Chinese and SxxExx filename forms."""
     try:
@@ -48,7 +56,13 @@ def parse_episode_from_name(text: str) -> tuple[int | None, int | None]:
             match = pattern.search(str(text or ""))
             if match:
                 season = match.groupdict().get("season")
-                return (int(season) if season else None, int(match.group("episode")))
+                episode = int(match.group("episode"))
+                if season is None and (
+                    _looks_like_year(episode) or episode in _NON_EPISODE_NUMBERS
+                ):
+                    # "2024.mkv" / "1080" 不是集数，继续尝试后续模式
+                    continue
+                return (int(season) if season else None, episode)
     except (TypeError, ValueError):
         return None, None
     return None, None
