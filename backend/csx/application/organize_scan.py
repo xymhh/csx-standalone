@@ -15,7 +15,7 @@ from csx.application.naming import (
     select_template,
     split_relative_path,
 )
-from csx.application.organize import media_type_dir
+from csx.application.organize import media_type_dir, resolve_category
 from csx.domain.naming import build_media_paths, parse_episode_from_name
 
 VIDEO_EXTENSIONS = {"mkv", "mp4", "avi", "mov", "wmv", "ts", "m2ts", "webm", "flv"}
@@ -50,12 +50,24 @@ def plan_organize(
     type_tv: str = "电视剧",
     naming: dict | None = None,
     episode_meta_for: Any = None,
+    categories: dict | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """Return matched and unrecognized drive files without performing I/O."""
     media = list(media_items)
     matched: list[dict[str, Any]] = []
     unrecognized: list[dict[str, Any]] = []
     warnings: list[str] = []
+    category_cache: dict[int, str] = {}
+
+    def _category(item) -> str:
+        media_id = int(item.id)
+        if media_id not in category_cache:
+            category_cache[media_id] = resolve_category(
+                {"type": item.type, "tmdb_id": getattr(item, "tmdb_id", None), "year": item.year},
+                categories,
+            )
+        return category_cache[media_id]
+
     for file in files:
         name = str(getattr(file, "name", ""))
         source_path = str(getattr(file, "path", "") or name)
@@ -127,6 +139,7 @@ def plan_organize(
             media_type_dir(item.type, type_movie=type_movie, type_tv=type_tv)
             if type_folder
             else "",
+            _category(item),
             folder,
             target_name,
         )

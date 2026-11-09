@@ -11,6 +11,7 @@ from csx.application.naming import (
     render_relative_path,
     split_relative_path,
 )
+from csx.domain.category import match_category
 from csx.domain.naming import build_media_paths
 
 _MOVIE_TYPES = {"movie", "film", "电影"}
@@ -26,11 +27,37 @@ def media_type_dir(media_type: str | None, *, type_movie: str, type_tv: str) -> 
     return type_movie if is_movie(media_type) else type_tv
 
 
+def resolve_category(
+    media: dict, strategies_by_type: dict | None
+) -> str:
+    """按二级分类策略算出分类目录名；拿不到元数据时返回空串（不建目录）。"""
+    if not strategies_by_type:
+        return ""
+    media_type = str(media.get("type") or "").lower()
+    key = "tv" if media_type in {"tv", "电视剧", "剧集"} else "movie"
+    strategies = strategies_by_type.get(key) or []
+    tmdb_id = media.get("tmdb_id")
+    if not strategies or not tmdb_id:
+        return ""
+    try:
+        from csx.adapters.media.tmdb import TmdbClient
+
+        detail = TmdbClient.get_detail("tv" if key == "tv" else "movie", int(tmdb_id)) or {}
+    except Exception as error:  # 分类只是目录美化，失败绝不影响整理
+        logger.warning("获取 TMDB 详情失败，跳过二级分类：%s", error)
+        return ""
+    info = dict(detail)
+    if not info.get("release_date") and media.get("year"):
+        info["release_date"] = f"{int(media['year']):04d}-01-01"
+    return match_category(strategies, info)
+
+
 def organize_file(
     drive,
     file_row: dict,
     media: dict,
     *,
+    category: str = "",
     library_root: str = "",
     type_folder: bool = False,
     type_movie: str = "电影",
@@ -79,6 +106,8 @@ def organize_file(
         segments.append(
             media_type_dir(media.get("type"), type_movie=type_movie, type_tv=type_tv).strip("/")
         )
+    if category:
+        segments.append(str(category).strip("/"))
     segments.append(folder)
     target_dir = posixpath.join(*[segment for segment in segments if segment])
     target_path = posixpath.join(target_dir, filename)

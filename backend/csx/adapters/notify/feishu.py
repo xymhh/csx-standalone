@@ -7,6 +7,8 @@ from typing import Any
 
 import httpx
 
+from csx.application.notify_template import EVENT_TITLES
+
 
 class FeishuNotifier:
     def __init__(self, client: httpx.Client | None = None, *, timeout: float = 10.0) -> None:
@@ -17,13 +19,21 @@ class FeishuNotifier:
         url = str(config.get("webhook_url") or config.get("url") or "").strip()
         if not url:
             raise ValueError("飞书 webhook_url 未配置")
-        body = "\n".join(f"**{key}**: {value}" for key, value in payload.items())
+        body = str(payload.get("text") or "").strip()
+        if not body:
+            body = "\n".join(
+                f"**{key}**: {value}"
+                for key, value in payload.items()
+                if key != "text" and value not in (None, "")
+            )
         response = self.client.post(
             url,
             json={
                 "msg_type": "interactive",
                 "card": {
-                    "header": {"title": {"tag": "plain_text", "content": event}},
+                    "header": {
+                        "title": {"tag": "plain_text", "content": EVENT_TITLES.get(event, event)}
+                    },
                     "elements": [{"tag": "div", "text": {"tag": "lark_md", "content": body}}],
                 },
             },

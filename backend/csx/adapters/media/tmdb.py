@@ -96,12 +96,24 @@ def format_tmdb_item(item: dict[str, Any]) -> dict[str, Any]:
         else None
     )
 
+    genre_ids = item.get("genre_ids")
+    if not genre_ids:
+        genre_ids = [
+            entry.get("id")
+            for entry in (item.get("genres") or [])
+            if isinstance(entry, dict) and entry.get("id")
+        ]
+
     return {
         "id": item.get("id"),
         "title": title,
         "type": media_type,
         "year": year,
         "release_date": release_date,
+        "genre_ids": [int(value) for value in (genre_ids or []) if value],
+        "original_language": item.get("original_language") or "",
+        "origin_country": list(item.get("origin_country") or []),
+        "production_countries": list(item.get("production_countries") or []),
         "vote_average": round(float(item.get("vote_average") or 0.0), 1),
         "overview": item.get("overview") or "",
         "poster_url": f"{TMDB_IMAGE_BASE}{poster}" if poster else None,

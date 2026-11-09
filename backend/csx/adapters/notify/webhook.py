@@ -17,7 +17,11 @@ class WebhookNotifier:
         url = str(config.get("url") or config.get("webhook_url") or "").strip()
         if not url:
             raise ValueError("Webhook URL 未配置")
-        response = self.client.post(url, json={"event": event, "data": dict(payload)})
+        data = {key: value for key, value in payload.items() if key != "text"}
+        response = self.client.post(
+            url,
+            json={"event": event, "text": str(payload.get("text") or ""), "data": data},
+        )
         response.raise_for_status()
 
     def close(self) -> None:

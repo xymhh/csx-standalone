@@ -98,6 +98,116 @@ const addingAccount = ref(false)
 // 高级参数折叠状态
 const showAdvDrama = ref(false)
 
+// ── 媒体二级分类（对齐 MoviePilot 的 category.yaml） ──
+type CategoryRule = { name: string; conditions: Record<string, string> }
+const CATEGORY_FIELDS = [
+  { value: 'genre_ids', label: '内容类型' },
+  { value: 'original_language', label: '语种' },
+  { value: 'production_countries', label: '制片国家' },
+  { value: 'origin_country', label: '来源国家' },
+  { value: 'release_year', label: '发行年份' },
+]
+const CATEGORY_DEFAULT_MOVIE: CategoryRule[] = [
+  { name: '动画电影', conditions: { genre_ids: '16' } },
+  { name: '华语电影', conditions: { original_language: 'zh,cn,bo,za' } },
+  { name: '外语电影', conditions: {} },
+]
+const CATEGORY_DEFAULT_TV: CategoryRule[] = [
+  { name: '国漫', conditions: { genre_ids: '16', origin_country: 'CN,TW,HK' } },
+  { name: '日番', conditions: { genre_ids: '16', origin_country: 'JP' } },
+  { name: '纪录片', conditions: { genre_ids: '99' } },
+  { name: '儿童', conditions: { genre_ids: '10762' } },
+  { name: '综艺', conditions: { genre_ids: '10764,10767' } },
+  { name: '国产剧', conditions: { origin_country: 'CN,TW,HK' } },
+  { name: '欧美剧', conditions: { origin_country: 'US,FR,GB,DE,ES,IT,NL,PT,RU,UK' } },
+  { name: '日韩剧', conditions: { origin_country: 'JP,KP,KR,TH,IN,SG' } },
+  { name: '未分类', conditions: {} },
+]
+const categoryConfig = ref<{ enabled: boolean; movie: CategoryRule[]; tv: CategoryRule[] }>({
+  enabled: true,
+  movie: JSON.parse(JSON.stringify(CATEGORY_DEFAULT_MOVIE)),
+  tv: JSON.parse(JSON.stringify(CATEGORY_DEFAULT_TV)),
+})
+const categoryTab = ref<'movie' | 'tv'>('movie')
+const CATEGORY_TABS = [
+  { value: 'movie' as const, label: '电影' },
+  { value: 'tv' as const, label: '剧集' },
+]
+
+function categoryRules(): CategoryRule[] {
+  return categoryConfig.value[categoryTab.value]
+}
+
+function addCategoryRule() {
+  categoryRules().push({ name: '', conditions: {} })
+}
+
+function removeCategoryRule(index: number) {
+  categoryRules().splice(index, 1)
+}
+
+function moveCategoryRule(index: number, delta: number) {
+  const rules = categoryRules()
+  const next = index + delta
+  if (next < 0 || next >= rules.length) return
+  const [item] = rules.splice(index, 1)
+  rules.splice(next, 0, item)
+}
+
+function addCategoryCondition(rule: CategoryRule) {
+  const used = new Set(Object.keys(rule.conditions))
+  const field = CATEGORY_FIELDS.find((item) => !used.has(item.value))?.value || 'genre_ids'
+  rule.conditions[field] = ''
+}
+
+function removeCategoryCondition(rule: CategoryRule, key: string) {
+  delete rule.conditions[key]
+}
+
+function onCategoryConditionKey(rule: CategoryRule, oldKey: string, event: Event) {
+  const target = event.target as HTMLSelectElement | null
+  const nextKey = target?.value || oldKey
+  if (nextKey === oldKey) return
+  const value = rule.conditions[oldKey] ?? ''
+  delete rule.conditions[oldKey]
+  rule.conditions[nextKey] = value
+}
+
+function resetCategoryRules() {
+  const source = categoryTab.value === 'movie' ? CATEGORY_DEFAULT_MOVIE : CATEGORY_DEFAULT_TV
+  categoryConfig.value[categoryTab.value] = JSON.parse(JSON.stringify(source))
+}
+
+// ── 通知消息模板 ──
+const NOTIFY_EVENT_LABELS: Record<string, string> = {
+  transfer_success: '转存成功',
+  upgrade_success: '洗版成功',
+  task_dead_letter: '转存失败',
+}
+const NOTIFY_VARIABLES: Record<string, string[]> = {
+  transfer_success: ['title', 'season', 'episode', 'quality', 'duration', 'now'],
+  upgrade_success: ['title', 'season', 'episode', 'from_quality', 'to_quality', 'now'],
+  task_dead_letter: ['title', 'error', 'share_url', 'now'],
+}
+const NOTIFY_DEFAULT_TEMPLATES: Record<string, string> = {
+  transfer_success:
+    '✅ 转存成功\n────────────────\n🎬 {{ title }}{% if season %}  S{{ \'%02d\'|format(season|int) }}E{{ \'%02d\'|format(episode|int) }}{% endif %}\n{% if quality %}💎 画质：{{ quality }}\n{% endif %}{% if duration %}⏱ 时长：{{ duration }}\n{% endif %}🕒 {{ now }}',
+  upgrade_success:
+    '🔄 洗版成功\n────────────────\n🎬 {{ title }}{% if season %}  S{{ \'%02d\'|format(season|int) }}E{{ \'%02d\'|format(episode|int) }}{% endif %}\n{% if from_quality %}📉 原画质：{{ from_quality }}\n{% endif %}{% if to_quality %}📈 新画质：{{ to_quality }}\n{% endif %}🕒 {{ now }}',
+  task_dead_letter:
+    '❌ 转存失败\n────────────────\n{% if title %}🎬 {{ title }}\n{% endif %}📄 原因：{{ error }}\n{% if share_url %}🔗 分享：{{ share_url }}\n{% endif %}🕒 {{ now }}',
+}
+const notifyTemplates = ref<Record<string, string>>({ ...NOTIFY_DEFAULT_TEMPLATES })
+
+function resetNotifyTemplate(event: string) {
+  notifyTemplates.value[event] = NOTIFY_DEFAULT_TEMPLATES[event] || ''
+}
+
+function insertNotifyVariable(event: string, variable: string) {
+  const current = notifyTemplates.value[event] || ''
+  notifyTemplates.value[event] = `${current}{{ ${variable} }}`
+}
+
 // TG 频道客户端状态
 const tgClientStatus = ref<TgClientStatus | null>(null)
 const tgScanning = ref(false)
@@ -292,12 +402,13 @@ async function loadSources() {
 async function loadAllSettings() {
   loading.value = true
   try {
-    const [b, t, s, n, a] = await Promise.all([
+    const [b, t, s, n, a, c] = await Promise.all([
       settingsApi.getSection('baseline'),
       settingsApi.getSection('transfer'),
       settingsApi.getSection('strm'),
       settingsApi.getSection('notify'),
       settingsApi.getSection('advanced'),
+      settingsApi.getSection('category'),
     ])
     Object.assign(f.value, b, t, s, n, a)
     const channels = (n as { channels?: Record<string, Record<string, unknown>> }).channels || {}
@@ -308,6 +419,16 @@ async function loadAllSettings() {
     f.value.telegram_enabled = Boolean(telegram.enabled ?? f.value.telegram_enabled)
     f.value.telegram_token = String(telegram.bot_token ?? f.value.telegram_token)
     f.value.telegram_chat_id = String(telegram.chat_id ?? f.value.telegram_chat_id)
+
+    const templates = (n as { templates?: Record<string, string> }).templates
+    if (templates && typeof templates === 'object') {
+      notifyTemplates.value = { ...NOTIFY_DEFAULT_TEMPLATES, ...templates }
+    }
+
+    const category = c as { enabled?: boolean; movie?: CategoryRule[]; tv?: CategoryRule[] }
+    if (typeof category.enabled === 'boolean') categoryConfig.value.enabled = category.enabled
+    if (Array.isArray(category.movie)) categoryConfig.value.movie = category.movie
+    if (Array.isArray(category.tv)) categoryConfig.value.tv = category.tv
   } catch (cause) {
     console.error(cause)
   } finally {
@@ -502,6 +623,7 @@ async function saveAll() {
         feishu: { enabled: f.value.feishu_enabled, webhook_url: f.value.feishu_url },
         telegram: { enabled: f.value.telegram_enabled, bot_token: f.value.telegram_token, chat_id: f.value.telegram_chat_id },
       },
+      templates: { ...notifyTemplates.value },
     }
 
     const pAdv = {
@@ -542,6 +664,11 @@ async function saveAll() {
       settingsApi.updateSection('strm', pStrm),
       settingsApi.updateSection('notify', pNotify),
       settingsApi.updateSection('advanced', pAdv),
+      settingsApi.updateSection('category', {
+        enabled: categoryConfig.value.enabled,
+        movie: categoryConfig.value.movie,
+        tv: categoryConfig.value.tv,
+      }),
       namingSave,
     ])
 
@@ -2061,6 +2188,110 @@ async function exchangeHdhiveOauth() {
           </div>
         </div>
       </div>
+
+      <!-- 卡片 D: 媒体二级分类 -->
+      <div class="apple-glass rounded-2xl p-5 space-y-3 text-xs">
+        <div class="flex items-center justify-between border-b border-white/[0.06] pb-3">
+          <div class="flex items-center gap-2">
+            <Layers class="h-4 w-4 text-amber-400" />
+            <h3 class="text-sm font-semibold text-white">媒体二级分类</h3>
+          </div>
+          <Switch v-model="categoryConfig.enabled" />
+        </div>
+        <p class="text-[11px] leading-relaxed text-zinc-500">
+          启用后媒体会多建一层分类目录，例如「电影/动画电影/片名 (年份)」。规则自上而下匹配，命中第一条即停止；条件留空表示兜底分类。
+        </p>
+        <div v-if="categoryConfig.enabled" class="space-y-3">
+          <div class="flex items-center gap-2">
+            <div class="flex rounded-lg bg-zinc-900/60 p-0.5">
+              <button
+                v-for="tab in CATEGORY_TABS"
+                :key="tab.value"
+                class="rounded-md px-3 py-1 text-[11px] transition"
+                :class="categoryTab === tab.value ? 'bg-white/10 text-white' : 'text-zinc-500 hover:text-zinc-300'"
+                @click="categoryTab = tab.value"
+              >
+                {{ tab.label }}
+              </button>
+            </div>
+            <span class="ml-auto text-[11px] text-zinc-500">顺序即优先级</span>
+          </div>
+
+          <div class="space-y-2">
+            <div
+              v-for="(rule, index) in categoryRules()"
+              :key="`${categoryTab}-${index}`"
+              class="rounded-xl border border-white/[0.06] bg-zinc-900/40 p-2.5"
+            >
+              <div class="flex items-center gap-2">
+                <span class="w-4 shrink-0 text-center text-[11px] text-zinc-600">{{ index + 1 }}</span>
+                <Input v-model="rule.name" placeholder="分类目录名，如 动画电影" class="h-8 flex-1" />
+                <div class="flex shrink-0 items-center gap-0.5">
+                  <button
+                    class="rounded-md p-1 text-zinc-500 hover:bg-white/5 hover:text-white disabled:opacity-30"
+                    :disabled="index === 0"
+                    @click="moveCategoryRule(index, -1)"
+                  >↑</button>
+                  <button
+                    class="rounded-md p-1 text-zinc-500 hover:bg-white/5 hover:text-white disabled:opacity-30"
+                    :disabled="index === categoryRules().length - 1"
+                    @click="moveCategoryRule(index, 1)"
+                  >↓</button>
+                  <button
+                    class="rounded-md p-1 text-zinc-500 hover:bg-rose-500/10 hover:text-rose-400"
+                    @click="removeCategoryRule(index)"
+                  >
+                    <Trash2 class="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+              <div class="mt-2 flex flex-wrap items-center gap-1.5 pl-6">
+                <div
+                  v-for="key in Object.keys(rule.conditions)"
+                  :key="key"
+                  class="flex items-center gap-1 rounded-lg border border-white/[0.06] bg-zinc-800/60 px-1.5 py-1"
+                >
+                  <select
+                    :value="key"
+                    class="bg-transparent text-[11px] text-zinc-300 outline-none"
+                    @change="onCategoryConditionKey(rule, key, $event)"
+                  >
+                    <option v-for="field in CATEGORY_FIELDS" :key="field.value" :value="field.value">
+                      {{ field.label }}
+                    </option>
+                  </select>
+                  <input
+                    v-model="rule.conditions[key]"
+                    placeholder="16 / CN,TW / 2020-2024"
+                    class="w-32 bg-transparent text-[11px] text-white outline-none placeholder:text-zinc-600"
+                  />
+                  <button class="text-zinc-500 hover:text-rose-400" @click="removeCategoryCondition(rule, key)">×</button>
+                </div>
+                <button
+                  v-if="Object.keys(rule.conditions).length < 3"
+                  class="rounded-lg border border-dashed border-white/10 px-2 py-1 text-[11px] text-zinc-400 hover:border-cyan-400/40 hover:text-cyan-300"
+                  @click="addCategoryCondition(rule)"
+                >
+                  + 条件
+                </button>
+                <span v-if="!Object.keys(rule.conditions).length" class="text-[11px] text-zinc-600">
+                  无条件 → 兜底分类
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <Button variant="outline" size="sm" @click="addCategoryRule">
+              <Plus class="h-3.5 w-3.5" />添加分类
+            </Button>
+            <Button variant="ghost" size="sm" @click="resetCategoryRules">
+              <RotateCcw class="h-3.5 w-3.5" />恢复 MP 默认
+            </Button>
+            <span class="ml-auto text-[11px] text-zinc-600">共 {{ categoryRules().length }} 条</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- 6. 通知与高级 (紧凑卡片网格) -->
@@ -2127,6 +2358,46 @@ async function exchangeHdhiveOauth() {
                 <label class="text-zinc-400">并发任务数</label>
                 <Input v-model.number="f.max_workers" type="number" min="1" max="32" />
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 卡片 D: 通知消息模板 -->
+      <div class="apple-glass rounded-2xl p-5 space-y-3 text-xs">
+        <div class="flex items-center gap-2 border-b border-white/[0.06] pb-3">
+          <FileText class="h-4 w-4 text-rose-400" />
+          <h3 class="text-sm font-semibold text-white">通知消息模板</h3>
+        </div>
+        <p class="text-[11px] leading-relaxed text-zinc-500">
+          用 Jinja2 语法自定义推送文案，变量为空时该行自动隐藏。点击右侧变量名可插入到模板末尾。
+        </p>
+        <div class="grid gap-3 md:grid-cols-3">
+          <div
+            v-for="(label, event) in NOTIFY_EVENT_LABELS"
+            :key="event"
+            class="space-y-2 rounded-xl border border-white/[0.06] bg-zinc-900/40 p-3"
+          >
+            <div class="flex items-center justify-between">
+              <span class="font-medium text-white">{{ label }}</span>
+              <button class="text-[11px] text-zinc-500 hover:text-white" @click="resetNotifyTemplate(event)">
+                恢复默认
+              </button>
+            </div>
+            <textarea
+              v-model="notifyTemplates[event]"
+              rows="7"
+              class="w-full rounded-lg border border-white/10 bg-zinc-900/60 p-2 font-mono text-[11px] leading-relaxed text-white outline-none"
+            />
+            <div class="flex flex-wrap gap-1">
+              <button
+                v-for="variable in NOTIFY_VARIABLES[event]"
+                :key="variable"
+                class="rounded-md bg-zinc-800/70 px-1.5 py-0.5 font-mono text-[10px] text-zinc-400 hover:text-cyan-300"
+                @click="insertNotifyVariable(event, variable)"
+              >
+                {{ variable }}
+              </button>
             </div>
           </div>
         </div>

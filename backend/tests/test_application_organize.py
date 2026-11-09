@@ -93,3 +93,42 @@ def test_invalid_template_falls_back_to_legacy_format():
     )
 
     assert path == "/CSX/媒体库/Example (2024)/Season 01/Example (2024) S01E01 [REMUX].mkv"
+
+
+def test_category_inserts_second_level_directory_for_tv():
+    drive = RecordingDrive()
+
+    path = organize_file(
+        drive,
+        _file_row(),
+        MEDIA_TV,
+        category="国漫",
+        library_root="/CSX/媒体库",
+        type_folder=True,
+    )
+
+    assert path == "/CSX/媒体库/电视剧/国漫/Example (2024)/Season 01/Example (2024) S01E01 [REMUX].mkv"
+    assert drive.moves[0] == ("f1", "/CSX/媒体库/电视剧/国漫/Example (2024)/Season 01")
+
+
+def test_category_inserts_second_level_directory_for_movie():
+    drive = RecordingDrive()
+
+    path = organize_file(
+        drive,
+        _file_row(season=None, episode=None),
+        MEDIA_MOVIE,
+        category="外语电影",
+        library_root="/CSX/媒体库",
+        type_folder=True,
+    )
+
+    assert path == "/CSX/媒体库/电影/外语电影/Example (2024)/Example (2024) [REMUX].mkv"
+
+
+def test_empty_category_keeps_legacy_layout():
+    drive = RecordingDrive()
+
+    path = organize_file(drive, _file_row(), MEDIA_TV, library_root="/CSX/媒体库")
+
+    assert path == "/CSX/媒体库/Example (2024)/Season 01/Example (2024) S01E01 [REMUX].mkv"

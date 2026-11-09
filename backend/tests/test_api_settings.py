@@ -9,7 +9,7 @@ class FakeDrive:
 
 def test_settings_six_sections_grouped_validation_and_test(client):
     login(client)
-    sections = ("baseline", "sources", "transfer", "strm", "notify", "advanced")
+    sections = ("baseline", "sources", "transfer", "strm", "notify", "advanced", "category")
     for section in sections:
         response = client.put(f"/api/v1/settings/{section}", json={"enabled": True})
         assert response.status_code == 200

@@ -6,6 +6,8 @@ from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
+from csx.application.notify_template import render_event
+
 from .feishu import FeishuNotifier
 from .telegram import TelegramNotifier
 from .webhook import WebhookNotifier
@@ -33,6 +35,9 @@ class NotificationDispatcher:
         self, settings: Mapping[str, Any], event: str, payload: Mapping[str, Any]
     ) -> dict[str, str]:
         """Send to enabled configured channels; individual failures never escape."""
+        templates = settings.get("templates") if isinstance(settings, Mapping) else None
+        enriched = dict(payload)
+        enriched["text"] = render_event(templates, event, payload)
         configured = settings.get("channels", settings)
         jobs: list[tuple[str, Any, Mapping[str, Any]]] = []
         for name, sender in self.senders.items():
@@ -43,7 +48,7 @@ class NotificationDispatcher:
         results: dict[str, str] = {}
         with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
             futures = {
-                pool.submit(sender.send, event, payload, config): name
+                pool.submit(sender.send, event, enriched, config): name
                 for name, sender, config in jobs
             }
             for future in as_completed(futures):

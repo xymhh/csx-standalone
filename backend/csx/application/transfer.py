@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from datetime import date
 
 from csx.application.naming import select_template
-from csx.application.organize import organize_file
+from csx.application.organize import organize_file, resolve_category
 from csx.domain.naming import parse_episode_from_name
 from csx.domain.resource import idempotency_key
 from csx.domain.task import TaskState, on_failure
@@ -123,6 +123,7 @@ def execute_transfer(
     settings,
     cloud_paths=None,
     naming=None,
+    categories=None,
 ) -> dict:
     """Run one share transfer and persist each recognized media episode.
 
@@ -286,6 +287,7 @@ def execute_transfer(
             return {"ok": False, "task_id": task_id, "state": next_state.value, "error": error}
 
         layout = _transfer_layout(settings, cloud_paths)
+        category = resolve_category(media_row or {}, categories)
         inbox = posixpath.join(layout["inbox_root"], key)
         try:
             outcome = drive.transfer(
@@ -349,6 +351,7 @@ def execute_transfer(
                     drive,
                     file_row,
                     media,
+                    category=category,
                     library_root=layout["library_root"],
                     type_folder=layout["type_folder"],
                     type_movie=layout["type_movie"],

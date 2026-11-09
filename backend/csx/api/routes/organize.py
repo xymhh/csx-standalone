@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from csx.api.envelope import ok
 from csx.application.organize_scan import plan_organize
+from csx.infra.category_config import resolve_category_strategies
 from csx.infra.cloud_paths import resolve_cloud_paths
 from csx.infra.db import get_db
 from csx.infra.drive_runtime import drive_for
@@ -56,6 +57,7 @@ def _plan(db: Session, account, drive, source_path: str):
         type_movie=paths["type_movie"],
         type_tv=paths["type_tv"],
         naming=resolve_naming(db),
+        categories=resolve_category_strategies(db),
         episode_meta_for=lambda media_id, season, episode: episode_meta(
             db, media_id, season, episode
         ),

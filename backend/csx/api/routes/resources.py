@@ -21,10 +21,13 @@ from csx.adapters.drive.registry import DriveRegistry
 from csx.adapters.library import SqlAlchemyLibraryRepository
 from csx.adapters.media.emby import server_clients
 from csx.api.envelope import ok
+from csx.application.notify_template import normalize_templates
+from csx.domain.category import default_strategies
 from csx.domain.resource import idempotency_key
 from csx.domain.subscription import SubscriptionScope
 from csx.domain.task import TaskState
 from csx.domain.upgrade import UpgradeAction, decide_upgrade
+from csx.infra.category_config import normalize_strategies
 from csx.infra.credentials import decrypt_credential, encrypt_credential
 from csx.infra.db import SessionLocal, get_db
 from csx.infra.drive_runtime import drive_for
@@ -53,7 +56,7 @@ settings_api = APIRouter(prefix="/settings", tags=["settings"])
 accounts = APIRouter(prefix="/accounts", tags=["accounts"])
 doctor = APIRouter(prefix="/doctor", tags=["doctor"])
 events = APIRouter(prefix="/events", tags=["events"])
-SECTIONS = {"baseline", "sources", "transfer", "strm", "notify", "advanced"}
+SECTIONS = {"baseline", "sources", "transfer", "strm", "notify", "advanced", "category"}
 HEARTBEAT_SECONDS = 15
 
 
@@ -685,6 +688,17 @@ def library_servers(db: Session = Depends(get_db)):
     return ok(result)
 
 
+def _apply_defaults(section: str, values: dict[str, Any]) -> dict[str, Any]:
+    """给缺省项补上默认值，方便前端直接渲染（不写库）。"""
+    if section == "category":
+        values.setdefault("enabled", True)
+        values.setdefault("movie", default_strategies("movie"))
+        values.setdefault("tv", default_strategies("tv"))
+    elif section == "notify":
+        values["templates"] = normalize_templates(values.get("templates"))
+    return values
+
+
 @settings_api.get("")
 def all_settings(db: Session = Depends(get_db)):
     values = {section: {} for section in sorted(SECTIONS)}
@@ -692,6 +706,8 @@ def all_settings(db: Session = Depends(get_db)):
         section, separator, key = row.key.partition(".")
         if separator and section in SECTIONS:
             values[section][key] = json.loads(row.value)
+    for section in SECTIONS:
+        values[section] = _apply_defaults(section, values[section])
     return ok(values)
 
 
@@ -702,13 +718,22 @@ def get_settings(section: str, db: Session = Depends(get_db)):
     values = {}
     for row in db.scalars(select(Setting).where(Setting.key.like(f"{section}.%"))):
         values[row.key.split(".", 1)[1]] = json.loads(row.value)
-    return ok(values)
+    return ok(_apply_defaults(section, values))
 
 
 @settings_api.put("/{section}")
 def put_settings(section: str, body: dict[str, Any], db: Session = Depends(get_db)):
     if section not in SECTIONS:
         _raise(404, "INVALID_SECTION", "设置分组不存在")
+    if section == "category":
+        for key in ("movie", "tv"):
+            if key in body:
+                body[key] = normalize_strategies(body[key])
+    if section == "notify" and "templates" in body:
+        body["templates"] = normalize_templates(body["templates"])
+        for template in body["templates"].values():
+            if len(template) > 4000:
+                _raise(422, "TEMPLATE_TOO_LONG", "通知模板不能超过 4000 个字符")
     for key, value in body.items():
         if not key or "." in key:
             _raise(422, "INVALID_SETTING_KEY", "配置项名称无效")

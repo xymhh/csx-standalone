@@ -103,7 +103,14 @@ export interface AccountTest {
 export interface QrcodeStartResponse { provider: '115' | 'quark'; qrcode: string; token_data: Record<string, string>; hint: string }
 export interface QrcodeCheckResponse { status: 'waiting' | 'scanned' | 'success' | 'expired'; message: string; account: Account | null }
 export interface DoctorReport { database?: { ok: boolean; size_bytes: number; error: string }; accounts?: Array<Record<string, unknown>>; scheduler?: { running: boolean; active_workers: number; waiting_queue_depth: number }; disk?: Record<string, unknown> }
-export type SettingSection = 'baseline' | 'sources' | 'transfer' | 'strm' | 'notify' | 'advanced'
+export type SettingSection =
+  | 'baseline'
+  | 'sources'
+  | 'transfer'
+  | 'strm'
+  | 'notify'
+  | 'advanced'
+  | 'category'
 export interface SearchSourceField {
   key: string
   label: string
