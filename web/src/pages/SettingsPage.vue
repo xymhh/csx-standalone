@@ -206,6 +206,9 @@ const f = ref<Record<string, any>>({
   p115_checkin_mode: 'normal',
   tg_monitor_enabled: false,
   tg_channels: '@Quark_Share_Group\n@share115',
+  tg_api_id: '',
+  tg_api_hash: '',
+  tg_session: '',
   tg_auto_transfer: true,
   log_level: 'INFO',
   max_workers: 8,
@@ -290,6 +293,14 @@ async function loadAllSettings() {
       settingsApi.getSection('advanced'),
     ])
     Object.assign(f.value, b, t, s, n, a)
+    const channels = (n as { channels?: Record<string, Record<string, unknown>> }).channels || {}
+    const feishu = channels.feishu || {}
+    const telegram = channels.telegram || {}
+    f.value.feishu_enabled = Boolean(feishu.enabled ?? f.value.feishu_enabled)
+    f.value.feishu_url = String(feishu.webhook_url ?? f.value.feishu_url)
+    f.value.telegram_enabled = Boolean(telegram.enabled ?? f.value.telegram_enabled)
+    f.value.telegram_token = String(telegram.bot_token ?? f.value.telegram_token)
+    f.value.telegram_chat_id = String(telegram.chat_id ?? f.value.telegram_chat_id)
   } catch (cause) {
     console.error(cause)
   } finally {
@@ -445,6 +456,9 @@ async function saveAll() {
       tg_monitor_enabled: f.value.tg_monitor_enabled,
       tg_channels: f.value.tg_channels,
       tg_auto_transfer: f.value.tg_auto_transfer,
+      tg_api_id: f.value.tg_api_id,
+      tg_api_hash: f.value.tg_api_hash,
+      tg_session: f.value.tg_session,
     }
 
     namingError.value = ''
@@ -2071,6 +2085,26 @@ async function exchangeHdhiveOauth() {
         </div>
 
         <div v-if="f.tg_monitor_enabled" class="space-y-3 pt-1">
+          <div class="space-y-2.5 rounded-xl border border-white/[0.06] bg-zinc-900/40 p-3">
+            <div class="flex items-center gap-2">
+              <Database class="h-3.5 w-3.5 text-zinc-500" />
+              <span class="font-medium text-zinc-300">TG 账号登录（频道监控必需）</span>
+            </div>
+            <div class="grid gap-2 sm:grid-cols-2">
+              <Input v-model="f.tg_api_id" placeholder="API ID，例如 30296810" />
+              <Input v-model="f.tg_api_hash" type="password" placeholder="API Hash（32 位十六进制）" />
+            </div>
+            <textarea
+              v-model="f.tg_session"
+              rows="3"
+              placeholder="Telethon StringSession（从已登录客户端导出）"
+              class="w-full rounded-xl border border-white/10 bg-zinc-900/60 p-2.5 font-mono text-[11px] text-white outline-none"
+            />
+            <p class="text-[11px] leading-relaxed text-zinc-500">
+              来自 MoviePilot 插件「频道监控」的登录凭据，用你自己的账号（而非机器人）读取公开与私有频道。会话串等同密码，仅保存在本机数据库。
+            </p>
+          </div>
+
           <div class="space-y-1">
             <label class="text-zinc-300">监控频道（每行一个）</label>
             <textarea
