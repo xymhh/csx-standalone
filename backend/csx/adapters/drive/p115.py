@@ -49,14 +49,16 @@ class P115DriveAdapter:
         share = self.share
         out: dict = {"url": url}
         try:
-            out["info"] = share.extract_share_info(url)
+            info = share.extract_share_info(url)
+            out["info"] = info if isinstance(info, dict) else str(info)
+            out["info_type"] = type(info).__name__
         except Exception as error:  # pragma: no cover - 诊断路径
             out["info_error"] = repr(error)
         client = getattr(share, "client", None)
         out["client_bool"] = bool(client)
         out["client_type"] = type(client).__name__
-        code = str((out.get("info") or {}).get("share_code") or "")
-        rcv = str((out.get("info") or {}).get("receive_code") or "")
+        code, rcv = share.resolve_share_codes(url)
+        out["codes"] = f"{code!r}/{rcv!r}"
         if client and code:
             payload = {"share_code": code, "receive_code": rcv, "cid": 0, "limit": 5, "offset": 0}
             for label, kwargs in (

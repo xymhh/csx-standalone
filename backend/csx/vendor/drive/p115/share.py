@@ -1,6 +1,7 @@
 """115 分享链接校验与文件遍历。"""
 
 import copy
+import re
 import time
 from typing import Any, Dict, List, Tuple
 
@@ -252,11 +253,10 @@ class ShareService(OwnerDelegator):
         if not self.client:
             return []
 
-        info = self.extract_share_info(share_url)
-        share_code = info.get("share_code")
-        receive_code = info.get("receive_code")
+        share_code, receive_code = self.resolve_share_codes(share_url)
 
         if not share_code or not receive_code:
+            self.last_list_error = f"解析失败 share_code={share_code!r} receive_code={receive_code!r}"
             logger.error(f"{prefix}无效的分享链接或解析失败")
             return []
 
@@ -276,6 +276,28 @@ class ShareService(OwnerDelegator):
         if files:
             self._share_file_cache[cache_key] = copy.deepcopy(files)
         return files
+
+    SHARE_CODE_PATTERN = re.compile(r"/s/([0-9a-zA-Z]+)")
+
+    def resolve_share_codes(self, share_url: str) -> Tuple[str, str]:
+        """解析 share_code/receive_code，p115client 解析失败时用正则兜底。"""
+        info = {}
+        try:
+            info = self.extract_share_info(share_url) or {}
+        except Exception as error:  # pragma: no cover - 诊断路径
+            logger.error(f"解析分享链接异常：{error}")
+        code = str(info.get("share_code") or "") if hasattr(info, "get") else ""
+        receive = str(info.get("receive_code") or "") if hasattr(info, "get") else ""
+        if not code:
+            match = self.SHARE_CODE_PATTERN.search(share_url)
+            if match:
+                code = match.group(1)
+        if not receive:
+            from urllib.parse import parse_qsl, urlsplit
+
+            query = dict(parse_qsl(urlsplit(share_url).query))
+            receive = str(query.get("password") or query.get("pwd") or "")
+        return code, receive
 
     def _snap_list(self, share_code: str, receive_code: str, cid: int = 0, offset: int = 0):
         """直接调 115 分享列表接口（iOS 通道）；share_iterdir 在部分分享上返回空。"""
