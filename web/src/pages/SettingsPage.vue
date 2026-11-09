@@ -58,6 +58,7 @@ import Tabs from '@/components/ui/Tabs.vue'
 import { useToast } from '@/composables/useToast'
 import {
   accountsApi,
+  crossTransferApi,
   namingApi,
   searchSourcesApi,
   settingsApi,
@@ -71,6 +72,7 @@ import {
   type SearchSourceTest,
   type SourceMeta,
   type TgClientStatus,
+  type CrossTransferSettings,
 } from '@/lib/api'
 
 const navItems = [
@@ -88,6 +90,17 @@ const { toast } = useToast()
 const accounts = ref<Account[]>([])
 const loading = ref(false)
 const saving = ref(false)
+const crossSaving = ref(false)
+const crossCfg = ref<CrossTransferSettings>({
+  enabled: true,
+  library_drive: '',
+  download_threads: 5,
+  max_concurrent: 2,
+  direct_stream: true,
+  cache_dir: '/cache',
+  cache_free_gb: 0,
+  drive_options: [],
+})
 
 // 网盘新增输入框状态
 const newAccountProvider = ref<'115' | 'quark'>('115')
@@ -436,6 +449,32 @@ async function loadAllSettings() {
   }
 }
 
+async function loadCrossSettings() {
+  try {
+    crossCfg.value = await crossTransferApi.get()
+  } catch (cause) {
+    console.error(cause)
+  }
+}
+
+async function saveCrossSettings() {
+  crossSaving.value = true
+  try {
+    crossCfg.value = await crossTransferApi.save({
+      enabled: crossCfg.value.enabled,
+      library_drive: crossCfg.value.library_drive,
+      download_threads: Number(crossCfg.value.download_threads),
+      max_concurrent: Number(crossCfg.value.max_concurrent),
+      direct_stream: crossCfg.value.direct_stream,
+    })
+    toast('跨盘转存设置已保存', 'success')
+  } catch (cause) {
+    toast(cause instanceof Error ? cause.message : '保存失败', 'error')
+  } finally {
+    crossSaving.value = false
+  }
+}
+
 async function loadNaming() {
   try {
     const data = await namingApi.get()
@@ -563,6 +602,7 @@ onMounted(() => {
   void loadSourceMeta()
   void loadSearchProxy()
   void loadNaming()
+  void loadCrossSettings()
   void loadTgClientStatus()
 })
 
@@ -599,9 +639,6 @@ async function saveAll() {
       enable_pt_upgrade: f.value.enable_pt_upgrade,
       min_quality: f.value.min_quality,
       min_episode_size_mb: Number(f.value.min_episode_size_mb),
-      cross_transfer_enabled: f.value.cross_transfer_enabled,
-      cross_transfer_threads: Number(f.value.cross_transfer_threads),
-      cross_transfer_direct_stream: f.value.cross_transfer_direct_stream,
       organize_source_path: f.value.organize_source_path,
       organize_include_subtitles: f.value.organize_include_subtitles,
       organize_conflict_policy: f.value.organize_conflict_policy,
@@ -1556,13 +1593,6 @@ async function exchangeHdhiveOauth() {
               <Switch v-model="f.subscribe_skip_season_zero" />
             </div>
 
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="font-medium text-white">跨盘直传搬运</p>
-                <p class="text-[11px] text-zinc-500">夸克与 115 间直接流式中继</p>
-              </div>
-              <Switch v-model="f.cross_transfer_enabled" />
-            </div>
           </div>
 
           <div class="space-y-1.5 pt-2">
@@ -2186,6 +2216,56 @@ async function exchangeHdhiveOauth() {
             </div>
             <Switch v-model="f.organize_include_subtitles" />
           </div>
+        </div>
+      </div>
+
+      <!-- 卡片 C2: 跨盘转存 -->
+      <div class="apple-glass rounded-2xl p-5 space-y-3 text-xs">
+        <div class="flex items-center justify-between border-b border-white/[0.06] pb-3">
+          <div class="flex items-center gap-2">
+            <Link2 class="h-4 w-4 text-sky-400" />
+            <h3 class="text-sm font-semibold text-white">跨盘转存</h3>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-[11px] text-zinc-500">缓存剩余 {{ crossCfg.cache_free_gb }} GB</span>
+            <Switch v-model="crossCfg.enabled" />
+          </div>
+        </div>
+        <p class="text-[11px] leading-relaxed text-zinc-500">
+          资源盘和媒体库盘不是同一个网盘时（例如夸克分享、115 媒体库），先下载到本地缓存，再秒传或上传到媒体库盘；同盘仍然直接转存。
+        </p>
+        <div v-if="!crossCfg.drive_options.length" class="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-[11px] text-amber-300">
+          还没有可用的媒体库网盘，先到「网盘账号」绑定 115 或夸克。
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="space-y-1.5">
+            <label class="font-medium text-white">媒体库所在网盘</label>
+            <Select
+              v-model="crossCfg.library_drive"
+              :options="crossCfg.drive_options.map((item) => ({ value: item.value, label: item.primary ? item.label + '（主号）' : item.label }))"
+            />
+          </div>
+          <div class="space-y-1.5">
+            <label class="font-medium text-white">下载线程数</label>
+            <Input v-model.number="crossCfg.download_threads" type="number" min="1" max="16" />
+          </div>
+          <div class="space-y-1.5">
+            <label class="font-medium text-white">同时中继任务数</label>
+            <Input v-model.number="crossCfg.max_concurrent" type="number" min="1" max="4" />
+          </div>
+          <div class="flex items-center justify-between rounded-xl bg-zinc-900/50 p-3 border border-white/[0.06]">
+            <div>
+              <p class="font-medium text-white">边下边传</p>
+              <p class="text-[11px] text-zinc-500">下载一块上传一块，省等待</p>
+            </div>
+            <Switch v-model="crossCfg.direct_stream" />
+          </div>
+        </div>
+        <div class="flex items-center justify-between pt-1">
+          <p class="text-[11px] text-zinc-500">缓存目录 {{ crossCfg.cache_dir }}</p>
+          <Button size="sm" :disabled="crossSaving" @click="saveCrossSettings">
+            {{ crossSaving ? '保存中…' : '保存跨盘设置' }}
+          </Button>
         </div>
       </div>
 

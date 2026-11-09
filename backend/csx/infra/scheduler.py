@@ -17,6 +17,11 @@ from csx.application.transfer import execute_transfer
 from csx.domain.task import TaskState
 from csx.infra.category_config import resolve_category_strategies
 from csx.infra.cloud_paths import resolve_cloud_paths
+from csx.infra.cross_transfer import (
+    build_cross_service,
+    load_cross_settings,
+    resolve_library_drive,
+)
 from csx.infra.db import SessionLocal
 from csx.infra.events import EventBus, event_bus
 from csx.infra.naming_config import resolve_naming
@@ -79,6 +84,7 @@ class TaskScheduler:
         self._claimed_keys: set[str] = set()
         self._key_locks: dict[str, asyncio.Lock] = {}
         self._buckets: dict[str, TokenBucket] = {}
+        self._cross_services: dict[str, Any] = {}
         self._stopping = False
         self._waiting_queue_depth = 0
 
@@ -256,6 +262,44 @@ class TaskScheduler:
                     transitions,
                     TaskState.RETRY_WAIT.value,
                 )
+            target_provider = ""
+            target_drive = None
+            target_cloud_paths = None
+            cross_service = None
+            cross_cfg = load_cross_settings(db)
+            if cross_cfg.get("enabled") and provider:
+                target_provider = resolve_library_drive(db, cross_cfg)
+                if target_provider and target_provider != provider:
+                    if target_provider not in self.drives:
+                        self.drives.update(DriveRegistry.from_session(db))
+                    target_drive = self.drives.get(target_provider)
+                    if target_drive is None:
+                        error = f"媒体库盘 {target_provider} 未配置账号，无法跨盘转存"
+                        tasks = repos.tasks
+                        tasks.transition(int(row["id"]), TaskState.RUNNING)
+                        tasks.transition(int(row["id"]), TaskState.DEAD_LETTER, error=error)
+                        db.commit()
+                        return (
+                            {"ok": False, "error": error},
+                            transitions,
+                            TaskState.DEAD_LETTER.value,
+                        )
+                    target_cloud_paths = resolve_cloud_paths(db, target_provider)
+                    try:
+                        cross_service = self._cross_service(
+                            provider, target_provider, db, cross_cfg
+                        )
+                    except Exception as error:
+                        detail = f"跨盘转存初始化失败：{error}"
+                        tasks = repos.tasks
+                        tasks.transition(int(row["id"]), TaskState.RUNNING)
+                        tasks.transition(int(row["id"]), TaskState.RETRY_WAIT, error=detail)
+                        db.commit()
+                        return (
+                            {"ok": False, "error": detail},
+                            transitions,
+                            TaskState.RETRY_WAIT.value,
+                        )
             task_row = dict(row)
             task_row["resource"] = resource
             result = execute_transfer(
@@ -267,10 +311,32 @@ class TaskScheduler:
                 cloud_paths=resolve_cloud_paths(db, provider) if provider else None,
                 naming=resolve_naming(db),
                 categories=resolve_category_strategies(db),
+                target_provider=target_provider,
+                target_drive=target_drive,
+                target_cloud_paths=target_cloud_paths,
+                cross_service=cross_service,
             )
             db.commit()
             task = repos.tasks.get(int(row["id"]))
             return result, transitions, str((task or {}).get("state", "unknown"))
+
+    def _cross_service(self, source: str, target: str, db, cfg: dict) -> Any:
+        """按「源盘>目标盘 + 关键参数」复用跨盘服务，避免每单重建任务管理器。"""
+        key = (
+            f"{source}>{target}|{cfg.get('cache_dir')}|{cfg.get('download_threads')}"
+            f"|{cfg.get('max_concurrent')}|{cfg.get('direct_stream')}"
+        )
+        service = self._cross_services.get(key)
+        if service is not None:
+            return service
+        service = build_cross_service(db, cfg)
+        missing = [name for name in (source, target) if not service.supports(name)]
+        if missing:
+            raise RuntimeError(f"未配置 {'、'.join(missing)} 网盘账号")
+        self._cross_services[key] = service
+        for stale in list(self._cross_services)[:-2]:
+            self._cross_services.pop(stale, None)
+        return service
 
     @property
     def active_workers(self) -> int:

@@ -42,6 +42,7 @@ docker compose up --build -d
 - 管理订阅与候选，调度网盘转存任务，跟踪进度与历史；支持命名解析、画质洗版判断、重试和死信状态。
 - 支持 P2 vendor 搬运的网盘驱动与搜索源；账号凭据加密存储，API 不回显明文。
 - 支持多账号签到及历史、STRM 生成、Webhook/Telegram/飞书通知、Emby/Jellyfin 探测和媒体库刷新。
+- **跨盘转存**：资源盘与媒体库盘不同时（如夸克分享 → 115 媒体库），经本地缓存下载后秒传或上传到媒体库盘；缓存目录 `./cache` 挂载到容器 `/cache`，开关与线程数在「设置 → 播放与整理 → 跨盘转存」。
 - 系统维护接口支持 SQLite 在线热备和备份清单；恢复可使用 CLI。
 - 后端全部测试使用离线 Fake/Mock；带 `net` 标记的真实驱动 smoke 测试默认跳过。
 
@@ -161,6 +162,7 @@ npm run build
 - [路径与分层配置接通](docs/summary/2026-11-09-路径与分层接通.md)
 - [config.json 与无卷部署](docs/summary/2026-11-09-config.json与无卷部署.md)
 - [config.json 与无卷部署验收](docs/test/2026-11-09-config.json与无卷部署验收.md)
+- [跨盘转存架构](docs/plan/2026-11-09-跨盘转存-架构.md)
 
 ## 许可证
 

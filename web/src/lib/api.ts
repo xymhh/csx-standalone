@@ -170,6 +170,16 @@ export interface SourceGlobalSettings {
   source_options: SourceOption[]
   resource_options: SourceOption[]
 }
+export interface CrossTransferSettings {
+  enabled: boolean
+  library_drive: string
+  download_threads: number
+  max_concurrent: number
+  direct_stream: boolean
+  cache_dir: string
+  cache_free_gb: number
+  drive_options: { value: string; label: string; primary: boolean }[]
+}
 export interface SourceMeta {
   accounts: Record<string, SourceAccountCard>
   options: Record<string, { status?: string; items?: SourceOption[]; error?: string; channels?: SourceOption[]; plugins?: SourceOption[] }>
@@ -267,6 +277,11 @@ export const namingApi = {
 }
 
 export const settingsApi = { getAll: () => api<Settings>('/api/v1/settings'), getSection: (section: SettingSection) => api<Record<string, unknown>>(`/api/v1/settings/${section}`), updateSection: (section: SettingSection, body: Record<string, unknown>) => api<Record<string, unknown>>(`/api/v1/settings/${section}`, { method: 'PUT', body: JSON.stringify(body) }), testProvider: (provider: string) => api<AccountTest>(`/api/v1/settings/test/${encodeURIComponent(provider)}`, { method: 'POST' }) }
+export const crossTransferApi = {
+  get: () => api<CrossTransferSettings>('/api/v1/settings/cross/config'),
+  save: (body: Partial<CrossTransferSettings>) =>
+    api<CrossTransferSettings>('/api/v1/settings/cross/config', { method: 'POST', body: JSON.stringify(body) }),
+}
 export const searchSourcesApi = {
   schema: () => api<SearchSourceSchema[]>('/api/v1/settings/sources/schema'),
   save: (body: Record<string, Record<string, unknown>>) => api<SearchSourceSchema[]>('/api/v1/settings/sources', { method: 'PUT', body: JSON.stringify(body) }),

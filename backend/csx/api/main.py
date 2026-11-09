@@ -32,6 +32,7 @@ from csx.api.routes import (
     system,
     tg,
     tmdb,
+    transfer_settings,
 )
 from csx.api.routes import media as media_proxy
 from csx.application.auth import session_user
@@ -163,6 +164,7 @@ app.include_router(organize.router, prefix="/api/v1")
 app.include_router(tmdb.router, prefix="/api/v1")
 app.include_router(media_proxy.router, prefix="/api/v1")
 app.include_router(naming.router, prefix="/api/v1")
+app.include_router(transfer_settings.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["meta"])

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import posixpath
 import threading
 import time
@@ -15,6 +16,9 @@ from csx.domain.naming import parse_episode_from_name
 from csx.domain.resource import idempotency_key
 from csx.domain.task import TaskState, on_failure
 from csx.domain.upgrade import UpgradeAction, decide_upgrade
+from csx.ports.drive import TransferOutcome
+
+logger = logging.getLogger(__name__)
 
 _GLOBAL = threading.BoundedSemaphore(8)
 _LOCKS: dict[str, threading.Lock] = {}
@@ -124,6 +128,10 @@ def execute_transfer(
     cloud_paths=None,
     naming=None,
     categories=None,
+    target_provider: str = "",
+    target_drive=None,
+    target_cloud_paths=None,
+    cross_service=None,
 ) -> dict:
     """Run one share transfer and persist each recognized media episode.
 
@@ -160,6 +168,14 @@ def execute_transfer(
             upgrade_enabled=bool(resource.get("upgrade_enabled", True)),
         )
     drive = drives[provider]
+    target_provider = str(target_provider or "").lower()
+    cross_ready = bool(
+        cross_service
+        and target_provider
+        and target_provider != provider
+        and target_drive is not None
+        and target_provider in drives
+    )
     with _serialize(key):
         stored = repos.tasks.get(task_id) if hasattr(repos.tasks, "get") else None
         state = str((stored or task_row).get("state", "queued"))
@@ -287,8 +303,10 @@ def execute_transfer(
             return {"ok": False, "task_id": task_id, "state": next_state.value, "error": error}
 
         layout = _transfer_layout(settings, cloud_paths)
+        target_layout = _transfer_layout(settings, target_cloud_paths) if cross_ready else layout
         category = resolve_category(media_row or {}, categories)
         inbox = posixpath.join(layout["inbox_root"], key)
+        target_inbox = posixpath.join(target_layout["inbox_root"], key)
         try:
             outcome = drive.transfer(
                 share_url,
@@ -304,6 +322,41 @@ def execute_transfer(
             error = outcome.error or "转存未生成文件"
             next_state = _retry_or_dead_letter(repos, task_id, current_attempt, error)
             return {"ok": False, "task_id": task_id, "state": next_state.value, "error": error}
+
+        if cross_ready:
+            relayed: list[tuple[str, str, int, str]] = []
+            relay_error = ""
+            for _file_id, path, _size, _sha1 in outcome.created:
+                name = posixpath.basename(path)
+                try:
+                    item = cross_service.relay(
+                        provider,
+                        inbox,
+                        name,
+                        target_provider,
+                        target_inbox,
+                        name,
+                        parent_task_id=str(task_id),
+                    )
+                except Exception as error:  # 中继失败整单重试，不落半截
+                    relay_error = _fmt_error(error)
+                    break
+                relayed.append((item["file_id"], item["path"], item["size"], item["sha1"]))
+                try:
+                    drive.delete_path(path)
+                except Exception as error:  # 源盘中转清理失败只记日志
+                    logger.warning(f"清理源盘中转文件失败 {path}：{error}")
+            if relay_error:
+                state = _retry_or_dead_letter(repos, task_id, current_attempt, relay_error)
+                return {
+                    "ok": False,
+                    "task_id": task_id,
+                    "state": state.value,
+                    "error": relay_error,
+                }
+            outcome = TransferOutcome(ok=True, created=relayed)
+            drive = target_drive
+            layout = target_layout
 
         media = task_row.get("media") or repos.get_media(media_id)
         organized = True
@@ -328,7 +381,7 @@ def execute_transfer(
                 size=size,
                 sha1=sha1,
                 quality_bucket=bucket,
-                provider=provider,
+                provider=target_provider if cross_ready else provider,
             )
             file_row = {
                 "file_id": file_id,

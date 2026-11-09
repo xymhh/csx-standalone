@@ -10,4 +10,5 @@ services:
     volumes:
       - ./config:/config
       - ./strm:/strm
+      - ./cache:/cache
     restart: unless-stopped
