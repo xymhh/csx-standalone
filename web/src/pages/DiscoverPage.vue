@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
-import { Compass, Film, Flame, Star, Tv, Plus, Check } from '@lucide/vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { Compass, Film, Star, Plus, Check } from '@lucide/vue'
 
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
@@ -10,14 +10,36 @@ import { useToast } from '@/composables/useToast'
 import { subscriptionsApi, tmdbApi, type TmdbItem } from '@/lib/api'
 
 const tabs = [
-  { value: 'trending', label: '🔥 今日热播' },
-  { value: 'tv', label: '📺 正在热播剧集' },
-  { value: 'movie', label: '🎬 热门电影' },
+  { value: 'trending', label: '流行趋势' },
+  { value: 'showing', label: '正在热映' },
+  { value: 'movie_hot', label: '热门电影' },
+  { value: 'tv_hot', label: '热门剧集' },
+  { value: 'calendar', label: '每日放送' },
+  { value: 'season', label: '本季新番' },
 ]
 const activeTab = ref('trending')
 const items = ref<TmdbItem[]>([])
 const loading = ref(false)
 const { toast } = useToast()
+
+const typeFilter = ref<'all' | 'movie' | 'tv'>('all')
+const yearFilter = ref<'all' | 'this' | 'recent'>('all')
+const ratingFilter = ref<'all' | '7' | '8' | '9'>('all')
+const currentYear = new Date().getFullYear()
+
+const filteredItems = computed(() => {
+  return items.value.filter((item) => {
+    if (typeFilter.value !== 'all' && item.type !== typeFilter.value) return false
+    if (yearFilter.value === 'this' && item.year !== currentYear) return false
+    if (yearFilter.value === 'recent' && (item.year === null || item.year < currentYear - 2)) {
+      return false
+    }
+    if (ratingFilter.value !== 'all' && item.vote_average < Number(ratingFilter.value)) {
+      return false
+    }
+    return true
+  })
+})
 
 // 详情弹窗
 const selected = ref<TmdbItem | null>(null)
@@ -42,13 +64,19 @@ async function fetchItems() {
   try {
     if (activeTab.value === 'trending') {
       items.value = await tmdbApi.trending()
-    } else if (activeTab.value === 'tv') {
-      items.value = await tmdbApi.popularTv()
-    } else if (activeTab.value === 'movie') {
-      items.value = await tmdbApi.popularMovies()
+    } else if (activeTab.value === 'showing') {
+      items.value = await tmdbApi.douban('showing')
+    } else if (activeTab.value === 'movie_hot') {
+      items.value = await tmdbApi.douban('movie_hot')
+    } else if (activeTab.value === 'tv_hot') {
+      items.value = await tmdbApi.douban('tv_hot')
+    } else if (activeTab.value === 'calendar') {
+      items.value = await tmdbApi.bangumiCalendar()
+    } else if (activeTab.value === 'season') {
+      items.value = await tmdbApi.anilistSeason()
     }
   } catch (cause) {
-    toast('获取热门推荐失败，请检查 TMDB API 连通性', 'error')
+    toast('获取推荐榜单失败，请稍后重试', 'error')
   } finally {
     loading.value = false
   }
@@ -72,16 +100,30 @@ async function subscribeItem() {
   if (!selected.value) return
   subscribing.value = true
   try {
+    let target = selected.value
+    let tmdbId = selected.value.id
+
+    if (tmdbId < 0) {
+      const matches = await tmdbApi.search(selected.value.title)
+      const first = matches.find((item) => item.id > 0)
+      if (!first) {
+        toast(`TMDB 未收录《${selected.value.title}》，无法加入追剧`, 'error')
+        return
+      }
+      target = first
+      tmdbId = first.id
+    }
+
     await subscriptionsApi.create({
-      title: selected.value.title,
-      media_type: selected.value.type,
-      year: selected.value.year || undefined,
-      tmdb_id: selected.value.id,
+      title: target.title,
+      media_type: target.type,
+      year: target.year || undefined,
+      tmdb_id: tmdbId,
       season_number: 1,
       episode_count: 24,
     })
-    subscribedIds.value.add(selected.value.id)
-    toast(`已添加《${selected.value.title}》！系统已开始全网找源转存`, 'success')
+    subscribedIds.value.add(tmdbId)
+    toast(`已添加《${target.title}》！系统已开始全网找源转存`, 'success')
     detailOpen.value = false
   } catch (cause) {
     toast(cause instanceof Error ? cause.message : '添加追剧失败', 'error')
@@ -97,7 +139,7 @@ async function subscribeItem() {
       <div>
         <h2 class="text-2xl font-bold tracking-tight text-fg flex items-center gap-2">
           <span>探索发现</span>
-          <Badge tone="good">TMDB 官方热播榜</Badge>
+          <Badge tone="good">多源热播榜</Badge>
         </h2>
         <p class="mt-1 text-xs text-muted">全网热播影视风向标，点击任意海报即可一键加入追更</p>
       </div>
@@ -105,6 +147,48 @@ async function subscribeItem() {
 
     <!-- 顶部清晰选项卡 -->
     <Tabs v-model="activeTab" :items="tabs" />
+
+    <!-- 筛选条 -->
+    <div
+      v-if="!loading && items.length"
+      class="flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 bg-surface/60 px-4 py-3 text-xs"
+    >
+      <label class="flex items-center gap-2">
+        <span class="text-subtle">类型</span>
+        <select
+          v-model="typeFilter"
+          class="rounded-lg border border-border/70 bg-surface-2/60 px-2.5 py-1.5 text-xs text-fg outline-none focus:border-zinc-500"
+        >
+          <option value="all">全部</option>
+          <option value="movie">电影</option>
+          <option value="tv">剧集</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-2">
+        <span class="text-subtle">年份</span>
+        <select
+          v-model="yearFilter"
+          class="rounded-lg border border-border/70 bg-surface-2/60 px-2.5 py-1.5 text-xs text-fg outline-none focus:border-zinc-500"
+        >
+          <option value="all">全部</option>
+          <option value="this">今年</option>
+          <option value="recent">近三年</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-2">
+        <span class="text-subtle">评分</span>
+        <select
+          v-model="ratingFilter"
+          class="rounded-lg border border-border/70 bg-surface-2/60 px-2.5 py-1.5 text-xs text-fg outline-none focus:border-zinc-500"
+        >
+          <option value="all">全部</option>
+          <option value="7">7+</option>
+          <option value="8">8+</option>
+          <option value="9">9+</option>
+        </select>
+      </label>
+      <span class="ml-auto text-subtle">共 {{ filteredItems.length }} 条</span>
+    </div>
 
     <!-- 加载骨架 -->
     <div v-if="loading" class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
@@ -121,24 +205,27 @@ async function subscribeItem() {
       class="rounded-2xl border border-dashed border-border/80 bg-surface/30 p-16 text-center space-y-3"
     >
       <Compass class="mx-auto h-10 w-10 text-subtle/50" />
-      <h3 class="text-base font-semibold text-fg">未能拉取到 TMDB 推荐榜单</h3>
-      <p class="text-xs text-muted max-w-sm mx-auto">
-        当前未配置 TMDB API 密钥，或服务器连接 TMDB 网络超时。你可以前往系统设置配置专属密钥，或者直接在搜索框搜影视。
-      </p>
+      <h3 class="text-base font-semibold text-fg">该榜单暂时没有数据，稍后再试</h3>
+      <p class="text-xs text-muted max-w-sm mx-auto">数据源可能暂时不可用，你可以稍后重试或切换其他榜单。</p>
       <div class="flex items-center justify-center gap-3 pt-2">
-        <Button variant="outline" size="sm" @click="fetchItems">
-          重试拉取
-        </Button>
-        <RouterLink to="/settings">
-          <Button size="sm">前往系统设置配置 TMDB</Button>
-        </RouterLink>
+        <Button variant="outline" size="sm" @click="fetchItems">重试拉取</Button>
       </div>
+    </div>
+
+    <!-- 筛选后为空 -->
+    <div
+      v-else-if="!filteredItems.length"
+      class="rounded-2xl border border-dashed border-border/80 bg-surface/30 p-16 text-center space-y-3"
+    >
+      <Compass class="mx-auto h-10 w-10 text-subtle/50" />
+      <h3 class="text-base font-semibold text-fg">没有符合筛选条件的条目</h3>
+      <p class="text-xs text-muted max-w-sm mx-auto">试试调整类型、年份或评分筛选。</p>
     </div>
 
     <!-- 2:3 电影海报流 -->
     <div v-else class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
       <article
-        v-for="item in items"
+        v-for="item in filteredItems"
         :key="item.id"
         class="group relative flex flex-col overflow-hidden rounded-2xl border border-border/70 bg-surface/80 shadow-sm transition-all duration-200 hover:-translate-y-1.5 hover:border-zinc-700 hover:shadow-xl hover:shadow-black/60 cursor-pointer"
         @click="openDetail(item)"

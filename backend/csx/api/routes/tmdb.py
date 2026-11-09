@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 
+from csx.adapters.media import anilist, bangumi, douban
 from csx.adapters.media.tmdb import TmdbClient
 from csx.api.envelope import ok
 
 router = APIRouter(prefix="/tmdb", tags=["tmdb"])
+
+DOUBAN_RANKS = {"showing", "movie_hot", "tv_hot"}
 
 
 @router.get("/trending")
@@ -29,6 +32,29 @@ def get_popular_movies():
     """获取热门电影榜单。"""
     items = TmdbClient.get_popular_movies()
     return ok(items)
+
+
+@router.get("/douban/{rank}")
+def get_douban_rank(rank: str):
+    """获取豆瓣正在热映 / 热门电影 / 热门剧集榜单。"""
+    if rank not in DOUBAN_RANKS:
+        raise HTTPException(
+            400,
+            detail={"code": "INVALID_RANK", "message": "榜单只能为 showing、movie_hot 或 tv_hot"},
+        )
+    return ok(douban.get_rank(rank))
+
+
+@router.get("/bangumi/calendar")
+def get_bangumi_calendar():
+    """获取 Bangumi 每日放送合并榜单。"""
+    return ok(bangumi.get_calendar())
+
+
+@router.get("/anilist/season")
+def get_anilist_season():
+    """获取 AniList 本季热门新番。"""
+    return ok(anilist.get_season())
 
 
 @router.get("/search")
