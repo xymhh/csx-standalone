@@ -77,6 +77,14 @@ class P115DriveAdapter:
                     }
                 except Exception as error:  # pragma: no cover - 诊断路径
                     out[label] = f"ERR {error!r}"
+            files = share.list_share_files(url) if code else []
+            if files:
+                target = {"share_code": code, "receive_code": rcv, "file_id": files[0].file_id}
+                try:
+                    resp = client.share_receive({**target, "cid": 0, "is_check": 1})
+                    out["receive_check"] = str(resp)[:500]
+                except Exception as error:  # pragma: no cover - 诊断路径
+                    out["receive_check"] = f"ERR {error!r}"
         return out
 
     def list_share_files(self, share_url: str, password: str = "") -> list[ShareFile]:
