@@ -41,6 +41,42 @@ class P115DriveAdapter:
             list(info.get("preview") or []),
         )
 
+    def debug_share(self, share_url: str, password: str = "") -> dict:
+        """诊断分享列表接口：返回 client 状态与两种通道的原始响应片段。"""
+        from csx.vendor.drive.p115.share import IOS_SHARE_USER_AGENT
+
+        url = self._share_url(share_url, password)
+        share = self.share
+        out: dict = {"url": url}
+        try:
+            out["info"] = share.extract_share_info(url)
+        except Exception as error:  # pragma: no cover - 诊断路径
+            out["info_error"] = repr(error)
+        client = getattr(share, "client", None)
+        out["client_bool"] = bool(client)
+        out["client_type"] = type(client).__name__
+        code = str((out.get("info") or {}).get("share_code") or "")
+        rcv = str((out.get("info") or {}).get("receive_code") or "")
+        if client and code:
+            payload = {"share_code": code, "receive_code": rcv, "cid": 0, "limit": 5, "offset": 0}
+            for label, kwargs in (
+                ("plain", {}),
+                ("ios_ua", {"headers": {"user-agent": IOS_SHARE_USER_AGENT}}),
+            ):
+                try:
+                    resp = client.share_snap(payload, **kwargs)
+                    data = resp.get("data") or {}
+                    first = (data.get("list") or [])[:1]
+                    out[label] = {
+                        "state": resp.get("state"),
+                        "count": data.get("count"),
+                        "keys": sorted(first[0].keys()) if first else [],
+                        "first": str(first)[:300],
+                    }
+                except Exception as error:  # pragma: no cover - 诊断路径
+                    out[label] = f"ERR {error!r}"
+        return out
+
     def list_share_files(self, share_url: str, password: str = "") -> list[ShareFile]:
         items = self.share.list_share_files(self._share_url(share_url, password))
         error = str(getattr(self.share, "last_list_error", "") or "")

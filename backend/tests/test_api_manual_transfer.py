@@ -37,6 +37,7 @@ def test_share_inspect_returns_file_tree_metadata(client, monkeypatch):
         "share_title": "Example share",
         "files": [{"id": "video-1", "name": "Example.S01E01.mkv", "size": 1024, "is_dir": False}],
         "preview": [],
+        "debug": None,
     }
 
 

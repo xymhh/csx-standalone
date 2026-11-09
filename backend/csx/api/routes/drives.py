@@ -58,6 +58,7 @@ class ShareInspectRequest(BaseModel):
     provider: Literal["115", "quark", "auto"] = "auto"
     share_url: str = Field(min_length=1)
     password: str = ""
+    debug: bool = False
 
 
 class CreateFolderRequest(BaseModel):
@@ -208,6 +209,11 @@ def inspect_share(body: ShareInspectRequest, request: Request, db: Session = Dep
                     "provider": provider,
                     "share_title": status.share_title or (files[0].name if files else "分享文件"),
                     "preview": status.preview,
+                    "debug": (
+                        drive.debug_share(body.share_url, body.password)
+                        if getattr(body, "debug", False) and hasattr(drive, "debug_share")
+                        else None
+                    ),
                     "files": [
                         {
                             "id": item.file_id,
