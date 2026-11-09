@@ -113,11 +113,14 @@ class P115DriveAdapter:
             if not item.is_directory
         ]
         ok = len(succeeded) == len(file_ids) and not failed
+        reason = str(getattr(self.share, "last_transfer_error", "") or "")
         return TransferOutcome(
             ok,
             [str(item) for item in failed],
             created,
-            "" if not failed else "部分 115 文件转存失败",
+            ""
+            if not failed
+            else (f"部分 115 文件转存失败：{reason}" if reason else "部分 115 文件转存失败"),
         )
 
     def move(self, file_id: str, target_dir: str) -> None:

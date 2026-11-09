@@ -966,6 +966,7 @@ class ShareService(OwnerDelegator):
                             time.sleep(wait_time)
                             continue
 
+                    self.last_transfer_error = f"{error_msg} (错误码: {error_code})"
                     logger.error(f"转存失败: {error_msg} (错误码: {error_code})")
                     return False
 
@@ -975,9 +976,11 @@ class ShareService(OwnerDelegator):
                     logger.debug(f"转存异常: {e}, {wait_time:.1f}秒后重试 (尝试 {attempt + 1}/{max_retries + 1})")
                     time.sleep(wait_time)
                 else:
+                    self.last_transfer_error = f"转存异常: {e}"
                     logger.error(f"转存过程中发生异常: {e}")
                     return False
             except Exception as e:
+                self.last_transfer_error = f"转存异常: {e}"
                 logger.error(f"转存过程中发生不可重试异常: {e}")
                 return False
 
