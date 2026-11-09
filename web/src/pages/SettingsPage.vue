@@ -693,6 +693,13 @@ function pickSource(sourceId: string) {
   sourceMenuOpen.value = false
 }
 
+function groupTitle(group: { title?: string }): string {
+  const title = String(group.title || '').trim()
+  if (!title) return '参数配置'
+  if (title === currentSource.value?.name) return '账号与连接'
+  return title
+}
+
 function toggleGroup(key: string) {
   collapsedGroups.value = { ...collapsedGroups.value, [key]: !collapsedGroups.value[key] }
 }
@@ -1441,7 +1448,7 @@ async function exchangeHdhiveOauth() {
     </div>
 
     <!-- 4. 搜索渠道（对齐原版插件：药丸标签 + 账户卡片 + 行式字段 + 底部保存） -->
-    <div v-else-if="currentNav === 'sources'" class="space-y-4 pb-24">
+    <div v-else-if="currentNav === 'sources'" class="space-y-4 pb-28">
       <!-- 渠道切换栏 -->
       <div class="apple-glass relative rounded-2xl px-2 py-2">
         <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
@@ -1594,15 +1601,15 @@ async function exchangeHdhiveOauth() {
           <button
             type="button"
             class="flex w-full items-center gap-2 px-4 py-2.5 text-left cursor-pointer"
-            @click="toggleGroup(group.title || 'default')"
+            @click="toggleGroup(groupTitle(group))"
           >
             <ChevronDown
               class="h-3.5 w-3.5 shrink-0 text-zinc-500 transition-transform"
-              :class="isGroupCollapsed(group.title || 'default') ? '-rotate-90' : ''"
+              :class="isGroupCollapsed(groupTitle(group)) ? '-rotate-90' : ''"
             />
-            <span class="text-xs font-semibold text-zinc-300">{{ group.title || '参数配置' }}</span>
+            <span class="text-xs font-semibold text-zinc-300">{{ groupTitle(group) }}</span>
           </button>
-          <div v-show="!isGroupCollapsed(group.title || 'default')">
+          <div v-show="!isGroupCollapsed(groupTitle(group))">
             <div
               v-for="field in group.fields"
               :key="field.key"
@@ -1639,7 +1646,7 @@ async function exchangeHdhiveOauth() {
       </div>
 
       <!-- 底部保存 -->
-      <div class="sticky bottom-4 z-20">
+      <div class="sticky bottom-0 z-20 pt-1">
         <div class="apple-glass flex items-center justify-between gap-3 rounded-2xl px-3 py-2.5 shadow-xl">
           <p class="text-[11px] text-zinc-500">
             共 {{ sourceSchemas.length }} 个渠道 · 当前 {{ currentSource?.name || '—' }}
