@@ -22,7 +22,10 @@ RUN apt-get update \
         libxkbcommon0 libxdamage1 libxfixes3 libxrandr2 libgbm1 \
         libasound2 libpango-1.0-0 libcairo2 fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/* \
-    && python -m cloakbrowser install
+    && (python -m cloakbrowser install \
+        || (sleep 20 && python -m cloakbrowser install) \
+        || (sleep 40 && python -m cloakbrowser install) \
+        || echo "WARN: cloakbrowser 二进制下载失败，构建继续，运行期需重试安装")
 
 COPY --from=web /web/dist ./web/dist
 VOLUME ["/data"]
