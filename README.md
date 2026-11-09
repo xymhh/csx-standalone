@@ -163,6 +163,9 @@ npm run build
 - [config.json 与无卷部署](docs/summary/2026-11-09-config.json与无卷部署.md)
 - [config.json 与无卷部署验收](docs/test/2026-11-09-config.json与无卷部署验收.md)
 - [跨盘转存架构](docs/plan/2026-11-09-跨盘转存-架构.md)
+- [传输与下载 UI 对齐 CS 插件（计划）](docs/plan/2026-11-10-传输与下载UI对齐CS插件.md)
+- [传输与下载 UI 本地渲染验收](docs/test/2026-11-10-传输与下载UI-本地渲染验收.md)
+- [传输与下载 UI 完成总结](docs/summary/2026-11-10-传输与下载UI对齐CS插件-完成.md)
 
 ## 许可证
 
