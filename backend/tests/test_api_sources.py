@@ -171,3 +171,43 @@ def test_global_search_proxy_settings_roundtrip(client):
     assert (
         client.post("/api/v1/settings/sources/global", json={"search_proxy": ""}).status_code == 200
     )
+
+
+def test_global_order_and_magnet_template(client):
+    login(client)
+    data = client.get("/api/v1/settings/sources/global").json()["data"]
+    assert data["resource_type_order"] == ["115", "ed2k"]
+    assert "{info_hash}" in data["magnet_metadata_url_template"]
+    assert any(item["id"] == "pansou" for item in data["source_options"])
+    assert any(item["id"] == "115" for item in data["resource_options"])
+
+    saved = client.post(
+        "/api/v1/settings/sources/global",
+        json={
+            "search_source_order": ["pansou", "mikan", "unknown-source", "pansou"],
+            "resource_type_order": ["quark", "115", "bogus"],
+            "magnet_metadata_url_template": "https://example.com/t/{info_hash}.torrent",
+            "search_proxy_username": "user",
+            "search_proxy_password": "pass",
+        },
+    )
+    assert saved.status_code == 200
+    payload = saved.json()["data"]
+    assert payload["search_source_order"] == ["pansou", "mikan"]
+    assert payload["resource_type_order"] == ["quark", "115"]
+    assert payload["search_proxy_username"] == "user"
+
+    bad = client.post(
+        "/api/v1/settings/sources/global",
+        json={"magnet_metadata_url_template": "https://example.com/no-placeholder"},
+    )
+    assert bad.status_code == 422
+    bad_scheme = client.post(
+        "/api/v1/settings/sources/global",
+        json={"magnet_metadata_url_template": "ftp://example.com/{info_hash}"},
+    )
+    assert bad_scheme.status_code == 422
+
+    reset = client.post("/api/v1/settings/sources/global", json={"resource_type_order": []})
+    assert reset.status_code == 200
+    assert reset.json()["data"]["resource_type_order"] == ["115", "ed2k"]

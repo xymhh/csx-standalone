@@ -62,18 +62,80 @@ def _upsert_setting(db: Session, key: str, value: str) -> None:
     db.commit()
 
 
+_MAGNET_DEFAULT = "https://itorrents.org/torrent/{info_hash}.torrent"
+_RESOURCE_ORDER_DEFAULT = ["115", "ed2k"]
+_RESOURCE_LABELS = {
+    "115": "115网盘",
+    "quark": "quark",
+    "123": "123网盘",
+    "alipan": "阿里云盘",
+    "guangya": "光雅",
+    "tianyi": "天翼云盘",
+    "yun139": "移动云盘",
+    "ed2k": "ed2k",
+    "magnet": "magnet",
+}
+
+
+def _searchable_source_options() -> list[dict[str, str]]:
+    """可参与搜索的渠道清单（频道监控这类非查询渠道不参与排序）。"""
+    options: list[dict[str, str]] = []
+    for schema in SearchSourceAdapter.schemas():
+        source_id = str(schema.get("id") or "")
+        if not source_id or source_id == "tgchannels":
+            continue
+        options.append({"id": source_id, "name": str(schema.get("name") or source_id)})
+    return options
+
+
+def _resource_options() -> list[dict[str, str]]:
+    return [{"id": key, "name": label} for key, label in _RESOURCE_LABELS.items()]
+
+
+def _clean_order(values: Any, allowed: set[str]) -> list[str]:
+    if isinstance(values, str):
+        values = [part for part in values.split(",")]
+    if not isinstance(values, list):
+        return []
+    cleaned: list[str] = []
+    for value in values:
+        key = str(value).strip().lower()
+        if key and key in allowed and key not in cleaned:
+            cleaned.append(key)
+    return cleaned
+
+
 @router.get("/global")
 def get_global_settings(db: Session = Depends(get_db)):
-    """搜索渠道的全局网络设置（当前只有代理）。"""
+    """搜索渠道的全局设置：排序优先级、Magnet 模板、搜索代理。"""
     saved = _saved_sources(db).get("global") or {}
     if not isinstance(saved, dict):
         saved = {}
-    return ok({"search_proxy": str(saved.get("search_proxy") or "")})
+    source_options = _searchable_source_options()
+    allowed_sources = {item["id"] for item in source_options}
+    return ok(
+        {
+            "search_proxy": str(saved.get("search_proxy") or ""),
+            "search_proxy_username": str(saved.get("search_proxy_username") or ""),
+            "search_proxy_password": str(saved.get("search_proxy_password") or ""),
+            "search_source_order": _clean_order(saved.get("search_source_order"), allowed_sources),
+            "resource_type_order": _clean_order(
+                saved.get("resource_type_order"), set(_RESOURCE_LABELS)
+            )
+            or list(_RESOURCE_ORDER_DEFAULT),
+            "magnet_metadata_url_template": str(
+                saved.get("magnet_metadata_url_template") or _MAGNET_DEFAULT
+            ),
+            "source_options": source_options,
+            "resource_options": _resource_options(),
+        }
+    )
 
 
 @router.post("/global")
 def save_global_settings(body: dict[str, Any], db: Session = Depends(get_db)):
-    proxy = str((body or {}).get("search_proxy") or "").strip()
+    payload = body or {}
+    proxy = str(payload.get("search_proxy") or "").strip()
     if proxy and not _PROXY_RE.match(proxy):
         raise HTTPException(
             status_code=422,
@@ -82,9 +144,39 @@ def save_global_settings(body: dict[str, Any], db: Session = Depends(get_db)):
                 "message": "代理地址格式应为 http://host:port、https://… 或 socks5h://…",
             },
         )
-    payload = json.dumps({"search_proxy": proxy}, ensure_ascii=False)
-    _upsert_setting(db, "sources.global", payload)
-    return ok({"search_proxy": proxy})
+    template = str(payload.get("magnet_metadata_url_template") or _MAGNET_DEFAULT).strip()
+    if "{info_hash}" not in template:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "INVALID_MAGNET_TEMPLATE",
+                "message": "Magnet 元数据地址模板必须包含 {info_hash} 占位符",
+            },
+        )
+    if not template.lower().startswith(("http://", "https://")):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "INVALID_MAGNET_TEMPLATE",
+                "message": "Magnet 元数据地址模板必须以 http:// 或 https:// 开头",
+            },
+        )
+    saved = {
+        "search_proxy": proxy,
+        "search_proxy_username": str(payload.get("search_proxy_username") or "").strip(),
+        "search_proxy_password": str(payload.get("search_proxy_password") or ""),
+        "search_source_order": _clean_order(
+            payload.get("search_source_order"),
+            {item["id"] for item in _searchable_source_options()},
+        ),
+        "resource_type_order": _clean_order(
+            payload.get("resource_type_order"), set(_RESOURCE_LABELS)
+        )
+        or list(_RESOURCE_ORDER_DEFAULT),
+        "magnet_metadata_url_template": template,
+    }
+    _upsert_setting(db, "sources.global", json.dumps(saved, ensure_ascii=False))
+    return ok(saved)
 
 
 @router.get("/schema")

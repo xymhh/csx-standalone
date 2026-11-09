@@ -147,6 +147,22 @@ export interface SourceAccountCard {
   user?: { name?: string; avatar?: string; badge?: string; is_vip?: boolean; membership_supported?: boolean }
   details?: SourceAccountDetail[]
 }
+
+export interface SourceOption {
+  id: string
+  name: string
+}
+
+export interface SourceGlobalSettings {
+  search_proxy: string
+  search_proxy_username: string
+  search_proxy_password: string
+  search_source_order: string[]
+  resource_type_order: string[]
+  magnet_metadata_url_template: string
+  source_options: SourceOption[]
+  resource_options: SourceOption[]
+}
 export interface SourceMeta {
   accounts: Record<string, SourceAccountCard>
   options: Record<string, { status?: string; items?: SourceOption[]; error?: string; channels?: SourceOption[]; plugins?: SourceOption[] }>
@@ -246,8 +262,9 @@ export const searchSourcesApi = {
   save: (body: Record<string, Record<string, unknown>>) => api<SearchSourceSchema[]>('/api/v1/settings/sources', { method: 'PUT', body: JSON.stringify(body) }),
   test: (sourceId: string) => api<SearchSourceTest>(`/api/v1/settings/sources/test/${encodeURIComponent(sourceId)}`, { method: 'POST' }),
   meta: () => api<SourceMeta>('/api/v1/settings/sources/meta'),
-  getGlobal: () => api<{ search_proxy: string }>('/api/v1/settings/sources/global'),
-  saveGlobal: (body: { search_proxy: string }) => api<{ search_proxy: string }>('/api/v1/settings/sources/global', { method: 'POST', body: JSON.stringify(body) }),
+  getGlobal: () => api<SourceGlobalSettings>('/api/v1/settings/sources/global'),
+  saveGlobal: (body: Partial<SourceGlobalSettings>) =>
+    api<SourceGlobalSettings>('/api/v1/settings/sources/global', { method: 'POST', body: JSON.stringify(body) }),
   refreshAccount: (sourceId: string) => api<SourceAccountCard>(`/api/v1/settings/sources/account/${encodeURIComponent(sourceId)}`, { method: 'POST' }),
   refreshOptions: (scope: string, key: string) => api<{ status?: string; items?: SourceOption[]; error?: string }>(`/api/v1/settings/sources/options/${encodeURIComponent(scope)}/${encodeURIComponent(key)}`, { method: 'POST' }),
   hdhiveOauthStart: (body: { client_id: string; redirect_uri: string; response_mode: string; scope?: string }) => api<HdhiveOauthStart>('/api/v1/settings/sources/hdhive/oauth/start', { method: 'POST', body: JSON.stringify(body) }),

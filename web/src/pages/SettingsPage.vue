@@ -15,6 +15,7 @@ import {
   Link2,
   MonitorPlay,
   MessagesSquare,
+  Network,
   Radar,
   Satellite,
   Snail,
@@ -26,6 +27,7 @@ import {
   HardDrive,
   Layers,
   List,
+  ListOrdered,
   PlaySquare,
   Plus,
   QrCode,
@@ -33,6 +35,7 @@ import {
   Radio,
   RefreshCw,
   Search,
+  SlidersHorizontal,
   Send,
   Sliders,
   Sparkles,
@@ -113,7 +116,7 @@ const chartTab = ref<'global' | 'douban' | 'tmdb' | 'bangumi' | 'mikan'>('global
 // 15 个搜索源自描述状态
 const sourceSchemas = ref<SearchSourceSchema[]>([])
 const sourceValues = ref<Record<string, Record<string, any>>>({})
-const selectedSourceId = ref('pansou')
+const selectedSourceId = ref('general')
 const sourceTest = ref<SearchSourceTest | null>(null)
 const sourceTestRunning = ref(false)
 const sourceMeta = ref<SourceMeta>({ accounts: {}, options: {} })
@@ -124,6 +127,14 @@ const sourceOauthCallback = ref('')
 const pansouMeta = ref<{ channels: { title: string; value: string }[]; plugins: { title: string; value: string }[]; status?: string }>({ channels: [], plugins: [] })
 const searchProxy = ref('')
 const searchProxySaving = ref(false)
+const proxyUsername = ref('')
+const proxyPassword = ref('')
+const sourceOrder = ref<string[]>([])
+const resourceOrder = ref<string[]>([])
+const magnetTemplate = ref('')
+const sourceOptions = ref<{ id: string; name: string }[]>([])
+const resourceOptions = ref<{ id: string; name: string }[]>([])
+const orderPicker = ref<'' | 'source' | 'resource'>('')
 
 // 表单全量响应式字段
 const f = ref<Record<string, any>>({
@@ -262,7 +273,7 @@ async function loadSources() {
     }
     sourceValues.value = values
     if (!selectedSourceId.value || !schemas.some((s) => s.id === selectedSourceId.value)) {
-      selectedSourceId.value = schemas[0]?.id ?? 'pansou'
+      selectedSourceId.value = 'general'
     }
     void ensureSourceAccount(selectedSourceId.value)
   } catch {}
@@ -740,8 +751,76 @@ async function loadSearchProxy() {
   try {
     const result = await searchSourcesApi.getGlobal()
     searchProxy.value = result.search_proxy || ''
+    proxyUsername.value = result.search_proxy_username || ''
+    proxyPassword.value = result.search_proxy_password || ''
+    sourceOrder.value = [...(result.search_source_order || [])]
+    resourceOrder.value = [...(result.resource_type_order || [])]
+    magnetTemplate.value = result.magnet_metadata_url_template || ''
+    sourceOptions.value = result.source_options || []
+    resourceOptions.value = result.resource_options || []
   } catch {
     // 忽略
+  }
+}
+
+function optionName(options: { id: string; name: string }[], id: string): string {
+  return options.find((item) => item.id === id)?.name || id
+}
+
+function orderCandidates(kind: 'source' | 'resource') {
+  const options = kind === 'source' ? sourceOptions.value : resourceOptions.value
+  const chosen = kind === 'source' ? sourceOrder.value : resourceOrder.value
+  return options.filter((item) => !chosen.includes(item.id))
+}
+
+function addOrderItem(kind: 'source' | 'resource', id: string) {
+  if (kind === 'source') sourceOrder.value = [...sourceOrder.value, id]
+  else resourceOrder.value = [...resourceOrder.value, id]
+  orderPicker.value = ''
+}
+
+function removeOrderItem(kind: 'source' | 'resource', id: string) {
+  if (kind === 'source') sourceOrder.value = sourceOrder.value.filter((item) => item !== id)
+  else resourceOrder.value = resourceOrder.value.filter((item) => item !== id)
+}
+
+function moveOrderItem(kind: 'source' | 'resource', id: string, delta: number) {
+  const list = kind === 'source' ? [...sourceOrder.value] : [...resourceOrder.value]
+  const index = list.indexOf(id)
+  const target = index + delta
+  if (index < 0 || target < 0 || target >= list.length) return
+  list.splice(index, 1)
+  list.splice(target, 0, id)
+  if (kind === 'source') sourceOrder.value = list
+  else resourceOrder.value = list
+}
+
+async function saveGlobalSettings() {
+  if (magnetTemplate.value && !magnetTemplate.value.includes('{info_hash}')) {
+    toast('Magnet 元数据地址模板必须包含 {info_hash}', 'error')
+    return
+  }
+  searchProxySaving.value = true
+  try {
+    const result = await searchSourcesApi.saveGlobal({
+      search_proxy: searchProxy.value.trim(),
+      search_proxy_username: proxyUsername.value.trim(),
+      search_proxy_password: proxyPassword.value,
+      search_source_order: sourceOrder.value,
+      resource_type_order: resourceOrder.value,
+      magnet_metadata_url_template: magnetTemplate.value.trim(),
+    })
+    searchProxy.value = result.search_proxy || ''
+    proxyUsername.value = result.search_proxy_username || ''
+    proxyPassword.value = result.search_proxy_password || ''
+    sourceOrder.value = [...(result.search_source_order || [])]
+    resourceOrder.value = [...(result.resource_type_order || [])]
+    magnetTemplate.value = result.magnet_metadata_url_template || ''
+    toast('通用设置已保存', 'success')
+  } catch (cause) {
+    toast(cause instanceof Error ? cause.message : '保存通用设置失败', 'error')
+  } finally {
+    searchProxySaving.value = false
   }
 }
 
@@ -828,7 +907,7 @@ const sourceAccountPending = ref<Set<string>>(new Set())
 
 // 进入某个渠道时静默拉一次账户信息，卡片才能一进页面就显示
 async function ensureSourceAccount(sourceId: string) {
-  if (!sourceId) return
+  if (!sourceId || sourceId === 'general') return
   if (sourceMeta.value.accounts[sourceId]) return
   if (sourceAccountPending.value.has(sourceId)) return
   const pending = new Set(sourceAccountPending.value)
@@ -1453,6 +1532,15 @@ async function exchangeHdhiveOauth() {
       <div class="apple-glass relative rounded-2xl px-2 py-2">
         <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
           <button
+            type="button"
+            class="flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all cursor-pointer whitespace-nowrap"
+            :class="selectedSourceId === 'general' ? 'bg-white/15 text-white ring-1 ring-white/20' : 'text-zinc-400 hover:bg-white/[0.05] hover:text-white'"
+            @click="pickSource('general')"
+          >
+            <SlidersHorizontal class="h-3.5 w-3.5 shrink-0" />
+            <span>通用设置</span>
+          </button>
+          <button
             v-for="s in visibleSourceTabs"
             :key="s.id"
             type="button"
@@ -1501,23 +1589,156 @@ async function exchangeHdhiveOauth() {
         </div>
       </div>
 
-      <!-- 全局网络：搜索代理 -->
-      <div class="apple-glass flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3">
-        <div class="min-w-[140px]">
-          <p class="text-xs font-medium text-white">搜索代理</p>
-          <p class="text-[11px] text-zinc-500">HDHive、UIndex 被 Cloudflare 拦截时填写</p>
+      <!-- 通用设置：搜索顺序 / Magnet 模板 / 搜索代理 -->
+      <div v-if="selectedSourceId === 'general'" class="apple-glass overflow-hidden rounded-2xl">
+        <div class="flex items-center gap-2 px-4 py-3">
+          <SlidersHorizontal class="h-4 w-4 shrink-0 text-emerald-400" />
+          <h4 class="text-sm font-semibold text-white">通用设置</h4>
         </div>
-        <Input
-          v-model="searchProxy"
-          placeholder="http://127.0.0.1:7890 或 socks5h://user:pass@host:1080"
-          class="h-9 min-w-[220px] flex-1 text-xs"
-        />
-        <Button variant="outline" size="sm" class="h-9 shrink-0 text-xs" :disabled="searchProxySaving" @click="saveSearchProxy">
-          {{ searchProxySaving ? '保存中…' : '保存' }}
-        </Button>
+
+        <section class="border-t border-white/[0.06]">
+          <div class="flex items-center gap-2 px-4 py-2.5">
+            <ListOrdered class="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+            <span class="text-xs font-semibold text-zinc-300">搜索顺序</span>
+          </div>
+
+          <div class="border-t border-white/[0.04] px-4 py-3 text-xs">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="font-medium text-white">搜索资源优先级</p>
+                <p class="mt-0.5 text-[11px] text-zinc-500">按顺序依次尝试，靠前的渠道先返回结果</p>
+              </div>
+              <span class="shrink-0 text-[11px] text-zinc-500">共 {{ sourceOptions.length }} 项</span>
+            </div>
+            <div class="mt-2 flex flex-wrap items-center gap-1.5">
+              <span
+                v-for="(id, index) in sourceOrder"
+                :key="id"
+                class="flex items-center gap-1 rounded-lg bg-white/[0.06] px-2 py-1"
+              >
+                <span class="text-[10px] font-semibold text-emerald-400">#{{ index + 1 }}</span>
+                <span class="text-[11px] text-white">{{ optionName(sourceOptions, id) }}</span>
+                <button type="button" class="px-0.5 text-zinc-500 hover:text-white disabled:opacity-30 cursor-pointer" :disabled="index === 0" @click="moveOrderItem('source', id, -1)">‹</button>
+                <button type="button" class="px-0.5 text-zinc-500 hover:text-white disabled:opacity-30 cursor-pointer" :disabled="index === sourceOrder.length - 1" @click="moveOrderItem('source', id, 1)">›</button>
+                <button type="button" class="px-0.5 text-zinc-500 hover:text-rose-400 cursor-pointer" @click="removeOrderItem('source', id)">✕</button>
+              </span>
+              <div class="relative">
+                <button
+                  type="button"
+                  class="rounded-lg border border-dashed border-white/15 px-2 py-1 text-[11px] text-zinc-400 hover:border-white/30 hover:text-white cursor-pointer"
+                  @click="orderPicker = orderPicker === 'source' ? '' : 'source'"
+                >+ 添加</button>
+                <div
+                  v-if="orderPicker === 'source'"
+                  class="absolute left-0 top-full z-30 mt-1 max-h-56 w-44 overflow-y-auto rounded-xl border border-white/10 bg-[#121214] p-1 shadow-2xl"
+                >
+                  <button
+                    v-for="opt in orderCandidates('source')"
+                    :key="opt.id"
+                    type="button"
+                    class="flex w-full items-center rounded-lg px-2 py-1.5 text-left text-[11px] text-zinc-300 hover:bg-white/[0.06] cursor-pointer"
+                    @click="addOrderItem('source', opt.id)"
+                  >{{ opt.name }}</button>
+                  <p v-if="!orderCandidates('source').length" class="px-2 py-1.5 text-[11px] text-zinc-500">已全部加入</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="border-t border-white/[0.04] px-4 py-3 text-xs">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="font-medium text-white">资源类型优先级</p>
+                <p class="mt-0.5 text-[11px] text-zinc-500">同一资源命中多个网盘时，按此顺序选择转存目标</p>
+              </div>
+              <span class="shrink-0 text-[11px] text-zinc-500">共 {{ resourceOptions.length }} 项</span>
+            </div>
+            <div class="mt-2 flex flex-wrap items-center gap-1.5">
+              <span
+                v-for="(id, index) in resourceOrder"
+                :key="id"
+                class="flex items-center gap-1 rounded-lg bg-white/[0.06] px-2 py-1"
+              >
+                <span class="text-[10px] font-semibold text-emerald-400">#{{ index + 1 }}</span>
+                <span class="text-[11px] text-white">{{ optionName(resourceOptions, id) }}</span>
+                <button type="button" class="px-0.5 text-zinc-500 hover:text-white disabled:opacity-30 cursor-pointer" :disabled="index === 0" @click="moveOrderItem('resource', id, -1)">‹</button>
+                <button type="button" class="px-0.5 text-zinc-500 hover:text-white disabled:opacity-30 cursor-pointer" :disabled="index === resourceOrder.length - 1" @click="moveOrderItem('resource', id, 1)">›</button>
+                <button type="button" class="px-0.5 text-zinc-500 hover:text-rose-400 cursor-pointer" @click="removeOrderItem('resource', id)">✕</button>
+              </span>
+              <div class="relative">
+                <button
+                  type="button"
+                  class="rounded-lg border border-dashed border-white/15 px-2 py-1 text-[11px] text-zinc-400 hover:border-white/30 hover:text-white cursor-pointer"
+                  @click="orderPicker = orderPicker === 'resource' ? '' : 'resource'"
+                >+ 添加</button>
+                <div
+                  v-if="orderPicker === 'resource'"
+                  class="absolute left-0 top-full z-30 mt-1 max-h-56 w-44 overflow-y-auto rounded-xl border border-white/10 bg-[#121214] p-1 shadow-2xl"
+                >
+                  <button
+                    v-for="opt in orderCandidates('resource')"
+                    :key="opt.id"
+                    type="button"
+                    class="flex w-full items-center rounded-lg px-2 py-1.5 text-left text-[11px] text-zinc-300 hover:bg-white/[0.06] cursor-pointer"
+                    @click="addOrderItem('resource', opt.id)"
+                  >{{ opt.name }}</button>
+                  <p v-if="!orderCandidates('resource').length" class="px-2 py-1.5 text-[11px] text-zinc-500">已全部加入</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="flex items-start gap-4 border-t border-white/[0.06] px-4 py-3 text-xs">
+          <div class="w-[36%] min-w-[104px] shrink-0">
+            <p class="leading-5 font-medium text-white">Magnet 元数据地址模板</p>
+            <p class="mt-0.5 text-[11px] leading-relaxed text-zinc-500">必须包含 {info_hash}</p>
+          </div>
+          <div class="min-w-0 flex-1">
+            <Input
+              v-model="magnetTemplate"
+              class="h-9 text-xs"
+              placeholder="https://itorrents.org/torrent/{info_hash}.torrent"
+            />
+          </div>
+        </section>
+
+        <section class="border-t border-white/[0.06]">
+          <div class="flex items-center gap-2 px-4 py-2.5">
+            <Network class="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+            <span class="text-xs font-semibold text-zinc-300">搜索代理</span>
+          </div>
+          <div class="flex items-start gap-4 border-t border-white/[0.04] px-4 py-3 text-xs">
+            <div class="w-[36%] min-w-[104px] shrink-0">
+              <p class="leading-5 font-medium text-white">代理地址</p>
+              <p class="mt-0.5 text-[11px] leading-relaxed text-zinc-500">留空直连，支持 http / socks5</p>
+            </div>
+            <div class="min-w-0 flex-1">
+              <Input v-model="searchProxy" class="h-9 text-xs" placeholder="http://127.0.0.1:7890 或 socks5h://host:1080" />
+            </div>
+          </div>
+          <div class="flex items-start gap-4 border-t border-white/[0.04] px-4 py-3 text-xs">
+            <div class="w-[36%] min-w-[104px] shrink-0">
+              <p class="leading-5 font-medium text-white">代理用户名</p>
+              <p class="mt-0.5 text-[11px] leading-relaxed text-zinc-500">代理需要认证时填写</p>
+            </div>
+            <div class="min-w-0 flex-1">
+              <Input v-model="proxyUsername" class="h-9 text-xs" placeholder="留空表示无需认证" />
+            </div>
+          </div>
+          <div class="flex items-start gap-4 border-t border-white/[0.04] px-4 py-3 text-xs">
+            <div class="w-[36%] min-w-[104px] shrink-0">
+              <p class="leading-5 font-medium text-white">代理密码</p>
+              <p class="mt-0.5 text-[11px] leading-relaxed text-zinc-500">仅保存在本机数据库</p>
+            </div>
+            <div class="min-w-0 flex-1">
+              <Input v-model="proxyPassword" type="password" class="h-9 text-xs" placeholder="留空表示无需认证" />
+            </div>
+          </div>
+        </section>
       </div>
 
-      <div v-if="currentSource" class="apple-glass overflow-hidden rounded-2xl">
+      <div v-else-if="currentSource" class="apple-glass overflow-hidden rounded-2xl">
         <!-- 渠道标题 -->
         <div class="flex items-center justify-between gap-3 px-4 py-3">
           <div class="flex min-w-0 items-center gap-2">
@@ -1653,10 +1874,16 @@ async function exchangeHdhiveOauth() {
       <div class="sticky bottom-0 z-20 pt-1">
         <div class="apple-glass flex items-center justify-between gap-3 rounded-2xl px-3 py-2.5 shadow-xl">
           <p class="text-[11px] text-zinc-500">
-            共 {{ sourceSchemas.length }} 个渠道 · 当前 {{ currentSource?.name || '—' }}
+            <template v-if="selectedSourceId === 'general'">通用设置 · 排序 / Magnet / 代理</template>
+            <template v-else>共 {{ sourceSchemas.length }} 个渠道 · 当前 {{ currentSource?.name || '—' }}</template>
           </p>
-          <Button size="sm" class="apple-btn-primary px-4 text-xs" :disabled="saving" @click="saveAll">
-            {{ saving ? '保存中…' : '保存配置' }}
+          <Button
+            size="sm"
+            class="apple-btn-primary px-4 text-xs"
+            :disabled="saving || searchProxySaving"
+            @click="selectedSourceId === 'general' ? saveGlobalSettings() : saveAll()"
+          >
+            {{ saving || searchProxySaving ? '保存中…' : '保存配置' }}
           </Button>
         </div>
       </div>
