@@ -36,7 +36,14 @@ FAILURE_COOLDOWN = 300.0
 MAX_WORKERS = 4
 #: 缺省资源类型顺序（与设置页默认值一致）。
 _DEFAULT_RESOURCE_TYPES = (
-    "115", "quark", "alipan", "uc", "tianyi", "123", "magnet", "ed2k",
+    "115",
+    "quark",
+    "alipan",
+    "uc",
+    "tianyi",
+    "123",
+    "magnet",
+    "ed2k",
 )
 
 _STORE_LOCK = threading.Lock()
@@ -186,9 +193,7 @@ def source_catalog(saved: dict[str, Any]) -> list[dict[str, Any]]:
     return catalog
 
 
-def _build_search_service(
-    definition: type, config: dict[str, Any], context: dict[str, Any]
-) -> Any:
+def _build_search_service(definition: type, config: dict[str, Any], context: dict[str, Any]) -> Any:
     client = definition.create_client(config, context)
     service = definition.create_service(client, config, context)
     provider = definition.create_provider(service, client, config, context)
@@ -238,7 +243,7 @@ def _format_size(raw: Any, size_text: Any = "") -> tuple[int | None, str]:
         return value, _human_size(value)
     if 0 < value <= 500:
         # 部分渠道（如 SeedHub）以 GB 为单位给数字，超出上限视为不可信
-        return int(value * 1024 ** 3), f"{value} GB"
+        return int(value * 1024**3), f"{value} GB"
     return None, ""
 
 
@@ -264,9 +269,7 @@ def _item_key(source_id: str, url: str, title: str) -> str:
     return f"{source_id}:{digest}"
 
 
-def _normalize_item(
-    row: dict[str, Any], source_id: str, source_name: str
-) -> dict[str, Any] | None:
+def _normalize_item(row: dict[str, Any], source_id: str, source_name: str) -> dict[str, Any] | None:
     candidate = normalize_search_candidate(row, source_id)
     title = str(candidate.get("title") or "").strip()
     urls = _all_urls(candidate.get("url"))
@@ -300,15 +303,10 @@ def _normalize_item(
         "size": size_value,
         "size_text": size_text,
         "update_time": str(
-            candidate.get("update_time")
-            or row.get("pubdate")
-            or row.get("update_time")
-            or ""
+            candidate.get("update_time") or row.get("pubdate") or row.get("update_time") or ""
         ).strip(),
         "description": str(candidate.get("description") or "").strip(),
-        "source_url": str(
-            candidate.get("source_url") or row.get("source_url") or ""
-        ).strip(),
+        "source_url": str(candidate.get("source_url") or row.get("source_url") or "").strip(),
         "media_page_url": str(candidate.get("media_page_url") or "").strip(),
         "fansub": str(row.get("fansub") or "").strip(),
         "needs_unlock": needs_unlock,

@@ -43,7 +43,7 @@ def test_search_aggregates_and_normalizes_candidates(client, monkeypatch):
                 "title": "[GM-Team][三体][01-15 Fin][1080P]",
                 "url": "magnet:?xt=urn:btih:aaa",
                 "resource_type": "magnet",
-                "size": 2 * 1024 ** 3,
+                "size": 2 * 1024**3,
                 "pubdate": "2023/04/16 14:27",
                 "fansub": "GM-Team",
             }
