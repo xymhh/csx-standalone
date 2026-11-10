@@ -9,7 +9,14 @@ from p4_helpers import login
 
 from csx.adapters.search import executor
 from csx.infra.db import SessionLocal
-from csx.infra.models import DiscoveredResource, MediaItem, TransferTask
+from csx.infra.models import (
+    DiscoveredResource,
+    Episode,
+    LibraryFile,
+    MediaItem,
+    Season,
+    TransferTask,
+)
 
 
 def _media(title: str = "自动搜源测试剧", year: int = 2024) -> int:
@@ -167,3 +174,36 @@ def test_auto_search_filters_low_quality_and_unmatched_title(client, monkeypatch
     assert data["skipped"]["quality"] == 1
     assert data["skipped"]["title"] == 1
     assert data["skipped"]["non_share"] == 1
+
+
+def test_auto_search_skips_movie_already_in_library(client, monkeypatch):
+    login(client)
+    with SessionLocal() as db:
+        media = MediaItem(
+            tmdb_id=int(uuid.uuid4().int % 2_000_000_000) + 1,
+            type="movie",
+            title="自动搜源电影",
+            year=2024,
+        )
+        db.add(media)
+        db.flush()
+        season = Season(media_id=media.id, season_number=1, episode_count=1)
+        db.add(season)
+        db.flush()
+        episode = Episode(season_id=season.id, episode_number=1)
+        db.add(episode)
+        db.flush()
+        db.add(LibraryFile(episode_id=episode.id, path="/library/movie.mkv", size=1024))
+        db.commit()
+        media_id = media.id
+    sub_id = _subscribe(client, media_id)
+    _mock_search(
+        monkeypatch,
+        [_item("自动搜源电影 2024 1080p 蓝光原盘", f"https://115.com/s/{uuid.uuid4().hex[:8]}")],
+    )
+    data = client.post("/api/v1/auto_search/run", json={"subscription_id": sub_id}).json()["data"][
+        "result"
+    ]
+    assert data["candidates"] == 0
+    assert data["tasks"] == []
+    assert data["skipped"]["owned"] == 1

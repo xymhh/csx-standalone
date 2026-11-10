@@ -221,6 +221,9 @@ def search_subscription(
         whole_season = False
         if is_movie:
             season, episode = 1, 1
+            if _episode_owned(db, media.id, season, episode):
+                skipped["owned"] = skipped.get("owned", 0) + 1
+                continue
         elif parsed_episode is None:
             whole_season = True
             episode = 0
