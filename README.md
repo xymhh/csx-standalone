@@ -1,5 +1,7 @@
 # CloudSubscribeX 独立版
 
+> 状态：**搁置**（2026-11-10 起线上实例已清除，回归 MoviePilot 插件 CloudSubscribeX）→ [搁置说明](docs/summary/2026-11-10-搁置.md)
+
 CloudSubscribeX 是独立运行的网盘订阅、搜索、转存、媒体整理与 STRM 管理系统，不依赖 MoviePilot。项目按 P0–P7 阶段完成：后端分层与 SQLite 持久化、网盘/搜索源 vendor 迁入、命名与转存编排、鉴权及资源 API、Vue 3 管理台、签到/STRM/通知/媒体服务器集成，以及 P7 备份恢复、崩溃任务自愈和迁移往返演练。
 
 ## 快速开始
@@ -173,6 +175,7 @@ npm run build
 - [全量重构验收](docs/test/2026-11-10-全量重构验收.md)
 - [全量重构完成总结](docs/summary/2026-11-10-全量重构-完成.md)
 - [线上部署与页签修复验收](docs/test/2026-11-10-线上部署与页签修复验收.md)
+- [项目搁置说明（2026-11-10）](docs/summary/2026-11-10-搁置.md)
 
 ## 许可证
 
