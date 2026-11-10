@@ -19,6 +19,7 @@ from csx.api.deps import COOKIE_NAME
 from csx.api.envelope import fail, ok
 from csx.api.routes import (
     auth,
+    auto_search,
     drives,
     duplicate,
     health,
@@ -37,6 +38,7 @@ from csx.api.routes import (
 )
 from csx.api.routes import media as media_proxy
 from csx.application.auth import session_user
+from csx.infra.auto_search_runtime import scheduled_auto_search
 from csx.infra.bootstrap import ensure_admin, init_db
 from csx.infra.checkin_runtime import scheduled_checkin
 from csx.infra.db import SessionLocal
@@ -64,6 +66,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     scheduler = TaskScheduler(
         drives=app.state.drives,
         checkin_callback=lambda: scheduled_checkin(SessionLocal),
+        auto_search_callback=lambda: scheduled_auto_search(SessionLocal),
     )
     app.state.scheduler = scheduler
     await scheduler.start()
@@ -157,6 +160,7 @@ app.include_router(p6.strm, prefix="/api/v1")
 app.include_router(system.router, prefix="/api/v1")
 app.include_router(sources.router, prefix="/api/v1")
 app.include_router(search.router, prefix="/api/v1")
+app.include_router(auto_search.router, prefix="/api/v1")
 app.include_router(tg.router, prefix="/api/v1")
 app.include_router(drives.router, prefix="/api/v1")
 app.include_router(offline.router, prefix="/api/v1")

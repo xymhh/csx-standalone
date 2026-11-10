@@ -71,6 +71,8 @@ class TaskScheduler:
         max_workers: int = 8,
         session_factory=SessionLocal,
         checkin_callback: Callable[[], Any] | None = None,
+        auto_search_callback: Callable[[], Any] | None = None,
+        auto_search_interval_seconds: float = 300,
     ) -> None:
         self.drives = drives if drives is not None else {}
         self.events = event_stream
@@ -78,7 +80,10 @@ class TaskScheduler:
         self.max_workers = max_workers
         self.session_factory = session_factory
         self.checkin_callback = checkin_callback
+        self.auto_search_callback = auto_search_callback
+        self.auto_search_interval_seconds = auto_search_interval_seconds
         self._checkin_job: asyncio.Task | None = None
+        self._auto_search_job: asyncio.Task | None = None
         self._poller: asyncio.Task | None = None
         self._workers: dict[int, asyncio.Task] = {}
         self._claimed_keys: set[str] = set()
@@ -96,6 +101,10 @@ class TaskScheduler:
                 self._checkin_job = asyncio.create_task(
                     self._checkin_loop(), name="csx-daily-checkin"
                 )
+            if self.auto_search_callback is not None:
+                self._auto_search_job = asyncio.create_task(
+                    self._auto_search_loop(), name="csx-auto-search"
+                )
 
     async def stop(self) -> None:
         self._stopping = True
@@ -107,6 +116,10 @@ class TaskScheduler:
             self._checkin_job.cancel()
             await asyncio.gather(self._checkin_job, return_exceptions=True)
             self._checkin_job = None
+        if self._auto_search_job is not None:
+            self._auto_search_job.cancel()
+            await asyncio.gather(self._auto_search_job, return_exceptions=True)
+            self._auto_search_job = None
         workers = list(self._workers.values())
         if workers:
             await asyncio.gather(*workers, return_exceptions=True)
@@ -128,6 +141,19 @@ class TaskScheduler:
         if current >= target:
             target += timedelta(days=1)
         return max(0.0, (target - current).total_seconds())
+
+    async def _auto_search_loop(self) -> None:
+        """周期触发订阅自动搜源；是否真正执行由回调内部按设置判断。"""
+        while not self._stopping:
+            try:
+                await asyncio.sleep(self.auto_search_interval_seconds)
+                if self._stopping:
+                    return
+                await run_in_threadpool(self.auto_search_callback)
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                continue
 
     async def _checkin_loop(self) -> None:
         while not self._stopping:

@@ -12,6 +12,7 @@ import { subscriptionsApi, type Subscription } from '@/lib/api'
 
 const rows = ref<Subscription[]>([])
 const open = ref(false)
+const syncingId = ref<number | null>(null)
 const { toast } = useToast()
 
 // 表单字段
@@ -62,11 +63,16 @@ async function toggle(row: Subscription) {
 }
 
 async function sync(id: number) {
+  if (syncingId.value !== null) return
+  syncingId.value = id
   try {
     const response = await subscriptionsApi.sync(id)
     toast(response.message, 'success')
+    await load()
   } catch (cause) {
-    toast(cause instanceof Error ? cause.message : '同步找源失败', 'error')
+    toast(cause instanceof Error ? cause.message : '搜源失败', 'error')
+  } finally {
+    syncingId.value = null
   }
 }
 </script>
@@ -107,9 +113,9 @@ async function sync(id: number) {
             <component :is="row.state === 'active' ? Pause : Play" class="mr-1.5 h-3.5 w-3.5" />
             {{ row.state === 'active' ? '暂停' : '继续追' }}
           </Button>
-          <Button variant="outline" size="sm" @click="sync(row.id)">
-            <RefreshCw class="mr-1.5 h-3.5 w-3.5" />
-            立即找资源
+          <Button variant="outline" size="sm" :disabled="syncingId !== null" @click="sync(row.id)">
+            <RefreshCw class="mr-1.5 h-3.5 w-3.5" :class="syncingId === row.id ? 'animate-spin' : ''" />
+            {{ syncingId === row.id ? '搜源中…' : '立即找资源' }}
           </Button>
           <Button variant="ghost" size="sm" class="text-rose-400 hover:text-rose-300 ml-auto" @click="subscriptionsApi.delete(row.id).then(load)">
             <Trash2 class="h-3.5 w-3.5" />

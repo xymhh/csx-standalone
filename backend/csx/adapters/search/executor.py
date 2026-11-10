@@ -48,6 +48,7 @@ _DEFAULT_RESOURCE_TYPES = (
 
 _STORE_LOCK = threading.Lock()
 _STORE: dict[str, Any] = {}
+_LOCKS: dict[str, threading.RLock] = {}
 
 
 class SearchOwnerShim:
@@ -71,6 +72,10 @@ class SearchOwnerShim:
     def __getattr__(self, name: str) -> Any:
         if name.startswith("__"):
             raise AttributeError(name)
+        # 渠道服务用 ``with owner._xxx_lock`` 串行化客户端创建，这里给每个名字一个共享锁
+        if name.endswith("_lock"):
+            with _STORE_LOCK:
+                return _LOCKS.setdefault(name, threading.RLock())
         if name.startswith("_"):
             return self._config.get(name[1:])
         raise AttributeError(name)
@@ -263,6 +268,26 @@ def _is_transferable(url: str) -> bool:
     return bool(resource_type_from_url(url))
 
 
+#: 明显不是影视资源的文件后缀（PanSou 会混入电子书/文档）。
+_NON_VIDEO_SUFFIXES = (
+    ".epub",
+    ".mobi",
+    ".azw3",
+    ".azw",
+    ".pdf",
+    ".txt",
+    ".doc",
+    ".docx",
+    ".cbz",
+    ".cbr",
+)
+
+
+def _looks_like_non_video(title: str) -> bool:
+    lowered = title.strip().casefold()
+    return lowered.endswith(_NON_VIDEO_SUFFIXES)
+
+
 def _item_key(source_id: str, url: str, title: str) -> str:
     seed = url or title
     digest = hashlib.sha1(f"{source_id}:{seed}".encode()).hexdigest()[:12]
@@ -280,6 +305,8 @@ def _normalize_item(row: dict[str, Any], source_id: str, source_name: str) -> di
         return None
     if not title:
         title = str(row.get("name") or row.get("display_name") or "").strip()
+    if _looks_like_non_video(title):
+        return None
     resource_type = str(candidate.get("resource_type") or "").strip().lower()
     if not resource_type or resource_type == "unknown":
         resource_type = resource_type_from_url(url) or resource_type or "unknown"

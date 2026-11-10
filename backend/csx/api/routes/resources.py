@@ -6,7 +6,6 @@ import asyncio
 import hashlib
 import json
 import shutil
-import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
@@ -22,6 +21,7 @@ from csx.adapters.drive.registry import DriveRegistry
 from csx.adapters.library import SqlAlchemyLibraryRepository
 from csx.adapters.media.emby import server_clients
 from csx.api.envelope import ok
+from csx.application import auto_search
 from csx.application.failure_label import failure_detail, failure_label
 from csx.application.notify_template import normalize_templates
 from csx.domain.category import default_strategies
@@ -310,24 +310,38 @@ def delete_subscription(subscription_id: int, db: Session = Depends(get_db)):
 
 
 @subscriptions.post("/{subscription_id}/sync")
-async def sync_subscription(subscription_id: int, db: Session = Depends(get_db)):
+def sync_subscription(subscription_id: int, db: Session = Depends(get_db)):
+    """立即为这部订阅跑一轮真实搜源，命中缺失集时落候选并按配置自动转存。"""
     row = db.get(Subscription, subscription_id)
     if row is None:
         _raise(404, "SUBSCRIPTION_NOT_FOUND", "订阅不存在")
-    token = uuid.uuid4().hex
-    sample = DiscoveredResource(
-        subscription_id=row.id,
-        provider="pending",
-        share_url="",
-        dedup_key=f"sync:{row.id}:{token}",
-        state="discovered",
-        payload=json.dumps({"triggered": True, "message": "已触发同步"}, ensure_ascii=False),
+    config = auto_search.load_settings(db)
+    result = auto_search.search_subscription(
+        db,
+        row,
+        limit=int(config["per_subscription_limit"]),
+        auto_transfer=bool(config["auto_transfer"]),
     )
-    db.add(sample)
-    db.commit()
-    db.refresh(sample)
-    await event_bus.publish("candidate_found", {"candidate_id": sample.id})
-    return ok({"triggered": True, "task_id": str(sample.id), "message": "已触发同步"})
+    tasks = list(result.get("tasks") or [])
+    candidates = int(result.get("candidates") or 0)
+    if not result.get("ok", True):
+        message = str(result.get("message") or "搜源失败")
+    elif candidates == 0:
+        message = "已搜索，暂无新的可转存资源"
+    elif tasks:
+        message = f"搜到 {candidates} 条新资源，已自动转存 {len(tasks)} 个"
+    else:
+        message = f"搜到 {candidates} 条新资源，已加入待选"
+    return ok(
+        {
+            "triggered": True,
+            "task_id": str(tasks[0]) if tasks else "",
+            "message": message,
+            "candidates": candidates,
+            "tasks": tasks,
+            "skipped": result.get("skipped") or {},
+        }
+    )
 
 
 def _resource_data(row: DiscoveredResource) -> dict:

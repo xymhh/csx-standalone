@@ -26,7 +26,7 @@ def test_subscriptions_crud_sync_validation_and_auth(client):
     assert patched.json()["data"]["state"] == "paused"
     synced = client.post(f"/api/v1/subscriptions/{sub_id}/sync")
     assert synced.json()["data"]["triggered"] is True
-    assert client.get("/api/v1/candidates?state=discovered").json()["data"]
+    assert "message" in synced.json()["data"]
     assert client.delete(f"/api/v1/subscriptions/{sub_id}").json()["data"]["deleted"] is True
 
     invalid = client.post("/api/v1/subscriptions", json={"media_id": 0})
