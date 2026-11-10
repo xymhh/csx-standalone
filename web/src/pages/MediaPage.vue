@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
 import {
   FolderSync,
   Copy,
@@ -23,17 +24,8 @@ import Select from '@/components/ui/Select.vue'
 import Table from '@/components/ui/Table.vue'
 import Tabs from '@/components/ui/Tabs.vue'
 import { useToast } from '@/composables/useToast'
-import {
-  accountsApi,
-  duplicateApi,
-  libraryApi,
-  organizeApi,
-  type Account,
-  type DuplicateGroup,
-  type LibraryFile,
-  type LibraryServer,
-  type OrganizeScanResult,
-} from '@/lib/api'
+import { accountsApi, libraryApi } from '@/api/drives'
+import { duplicateApi, organizeApi, type OrganizeScanResult } from '@/api/organize'
 
 const tabs = [
   { value: 'files', label: '已入库文件' },
@@ -42,13 +34,66 @@ const tabs = [
 ]
 const activeTab = ref('files')
 
-const files = ref<LibraryFile[]>([])
-const servers = ref<LibraryServer[]>([])
-const accounts = ref<Account[]>([])
-const duplicates = ref<DuplicateGroup[]>([])
 const selectedDups = ref<number[]>([])
 const error = ref('')
 const { toast } = useToast()
+
+// 已入库文件与媒体服务器
+const filesQuery = useQuery({
+  queryKey: ['library', 'files'],
+  queryFn: () => libraryApi.listFiles(),
+})
+const serversQuery = useQuery({
+  queryKey: ['library', 'servers'],
+  queryFn: () => libraryApi.getServers(),
+})
+const files = computed(() => filesQuery.data.value ?? [])
+const servers = computed(() => serversQuery.data.value ?? [])
+watch(
+  () => filesQuery.error.value ?? serversQuery.error.value,
+  (cause) => {
+    if (cause) error.value = cause instanceof Error ? cause.message : '加载失败'
+  },
+)
+
+// 多版本查重：切到该页签才加载，每次加载后默认全选待清理的低画质副本
+const duplicatesQuery = useQuery({
+  queryKey: ['duplicates'],
+  queryFn: () => duplicateApi.list(),
+  enabled: computed(() => activeTab.value === 'duplicates'),
+})
+const duplicates = computed(() => duplicatesQuery.data.value ?? [])
+watch(
+  () => duplicatesQuery.data.value,
+  (list) => {
+    if (!list) return
+    const toClean: number[] = []
+    for (const group of list) {
+      for (const f of group.files) {
+        if (!f.recommended) toClean.push(f.id)
+      }
+    }
+    selectedDups.value = toClean
+  },
+)
+watch(
+  () => duplicatesQuery.error.value,
+  (cause) => {
+    if (cause) toast(cause instanceof Error ? cause.message : '查重数据加载失败', 'error')
+  },
+)
+
+// 网盘账号（全局共享查询）；加载后默认选第一个账号
+const accountsQuery = useQuery({
+  queryKey: ['accounts'],
+  queryFn: () => accountsApi.list(),
+})
+const accounts = computed(() => accountsQuery.data.value ?? [])
+watch(accounts, (list) => {
+  if (!selectedAccountId.value && list.length > 0) {
+    selectedAccountId.value = String(list[0].id)
+  }
+})
 
 // 整理表单状态
 const selectedAccountId = ref<string>('')
@@ -61,45 +106,16 @@ const selectedFileIds = ref<string[]>([])
 const copiedFileId = ref<number | null>(null)
 
 async function loadFiles() {
-  try {
-    ;[files.value, servers.value] = await Promise.all([
-      libraryApi.listFiles(),
-      libraryApi.getServers(),
-    ])
-  } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : '加载失败'
-  }
+  await Promise.all([filesQuery.refetch(), serversQuery.refetch()])
 }
 
 async function loadDuplicates() {
-  try {
-    duplicates.value = await duplicateApi.list()
-    // 默认全选所有待清理的低画质副本
-    const toClean: number[] = []
-    for (const group of duplicates.value) {
-      for (const f of group.files) {
-        if (!f.recommended) toClean.push(f.id)
-      }
-    }
-    selectedDups.value = toClean
-  } catch (cause) {
-    toast(cause instanceof Error ? cause.message : '查重数据加载失败', 'error')
-  }
+  await duplicatesQuery.refetch()
 }
 
 async function loadAccounts() {
-  try {
-    accounts.value = await accountsApi.list()
-    if (!selectedAccountId.value && accounts.value.length > 0) {
-      selectedAccountId.value = String(accounts.value[0].id)
-    }
-  } catch {}
+  await accountsQuery.refetch()
 }
-
-onMounted(() => {
-  void loadFiles()
-  void loadAccounts()
-})
 
 function switchTab(val: string) {
   activeTab.value = val

@@ -4,7 +4,7 @@ import { Film } from '@lucide/vue'
 
 import Badge from '@/components/ui/Badge.vue'
 import { posterSrc } from '@/lib/poster'
-import type { ProgressItem } from '@/lib/api'
+import type { ProgressItem } from '@/api/subscriptions'
 
 const props = defineProps<{ media: ProgressItem }>()
 defineEmits<{ select: [mediaId: number] }>()
@@ -12,12 +12,12 @@ const slots = useSlots()
 
 const gradient = computed(() => {
   const gradients = [
-    'from-blue-950/70 via-zinc-950 to-black',
-    'from-emerald-950/70 via-zinc-950 to-black',
-    'from-purple-950/70 via-zinc-950 to-black',
-    'from-rose-950/70 via-zinc-950 to-black',
-    'from-amber-950/70 via-zinc-950 to-black',
-    'from-indigo-950/70 via-zinc-950 to-black',
+    'from-blue-950/70 via-canvas to-bg',
+    'from-emerald-950/70 via-canvas to-bg',
+    'from-purple-950/70 via-canvas to-bg',
+    'from-rose-950/70 via-canvas to-bg',
+    'from-amber-950/70 via-canvas to-bg',
+    'from-indigo-950/70 via-canvas to-bg',
   ]
   let sum = 0
   for (let i = 0; i < props.media.title.length; i++) {
@@ -40,7 +40,7 @@ const percent = computed(() => {
     @click="$emit('select', media.media_id)"
   >
     <!-- 顶部封面区域（2:3 国际标准纵横比，大图全幅呈现） -->
-    <div class="relative aspect-[2/3] w-full overflow-hidden bg-zinc-950">
+    <div class="relative aspect-[2/3] w-full overflow-hidden bg-canvas">
       <!-- 官方高清海报 -->
       <img
         v-if="media.poster_url"
@@ -58,18 +58,18 @@ const percent = computed(() => {
         :class="gradient"
       >
         <div class="absolute inset-0 grid place-items-center opacity-25 transition-opacity group-hover:opacity-40">
-          <Film class="h-12 w-12 text-zinc-100" />
+          <Film class="h-12 w-12 text-fg" />
         </div>
       </div>
 
       <!-- 暂停态灰度遮罩 -->
-      <div v-if="paused" class="pointer-events-none absolute inset-0 bg-black/40" />
+      <div v-if="paused" class="pointer-events-none absolute inset-0 bg-bg/40" />
 
       <!-- 顶部半透明轻盈胶囊 -->
       <div class="absolute inset-x-2.5 top-2.5 flex items-center justify-between pointer-events-none" :class="slots.actions ? 'pr-9' : ''">
         <span
           class="rounded-full px-2.5 py-0.5 text-[10px] font-medium backdrop-blur-xl border shadow-sm"
-          :class="paused ? 'border-amber-500/30 bg-amber-500/15 text-amber-300' : 'border-white/10 bg-black/60 text-zinc-200'"
+          :class="paused ? 'border-amber-500/30 bg-amber-500/15 text-amber-300' : 'border-primary/10 bg-bg/60 text-fg-2'"
         >
           {{ paused ? '已暂停' : media.seasons.length > 1 ? `共 ${media.seasons.length} 季` : '第 1 季' }}
         </span>
@@ -84,24 +84,24 @@ const percent = computed(() => {
       </div>
 
       <!-- 底部暗影自然过渡蒙版与标题 -->
-      <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/80 to-transparent p-3 pt-12">
-        <h3 class="truncate text-sm font-semibold text-white tracking-tight drop-shadow-md" :title="media.title">
+      <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-bg via-bg/80 to-transparent p-3 pt-12">
+        <h3 class="truncate text-sm font-semibold text-fg tracking-tight drop-shadow-md" :title="media.title">
           {{ media.title }}
         </h3>
       </div>
     </div>
 
     <!-- 底部极简进度排版 -->
-    <div class="p-3 pt-2.5 space-y-2 bg-zinc-900/40">
-      <div class="flex items-center justify-between text-[11px] text-zinc-400">
+    <div class="p-3 pt-2.5 space-y-2 bg-surface-solid/40">
+      <div class="flex items-center justify-between text-[11px] text-muted">
         <span>追更进度</span>
-        <span class="tabular-num font-medium text-zinc-200">
-          {{ media.owned_count }} <span class="text-zinc-600">/</span> {{ media.aired_count }} 集
+        <span class="tabular-num font-medium text-fg-2">
+          {{ media.owned_count }} <span class="text-faint">/</span> {{ media.aired_count }} 集
         </span>
       </div>
 
       <!-- 进度条 -->
-      <div class="h-1.5 w-full overflow-hidden rounded-full bg-zinc-800/80">
+      <div class="h-1.5 w-full overflow-hidden rounded-full bg-surface-2/80">
         <div
           class="h-full rounded-full transition-all duration-500 ease-out"
           :class="media.missing.length ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.3)]' : 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.3)]'"
@@ -109,9 +109,9 @@ const percent = computed(() => {
         />
       </div>
 
-      <div class="flex items-center justify-between text-[11px] text-zinc-500 pt-0.5">
+      <div class="flex items-center justify-between text-[11px] text-subtle pt-0.5">
         <span>{{ percent === 100 ? '全集已入库' : `待补 ${media.missing.length} 集` }}</span>
-        <span class="text-zinc-400 group-hover:text-white transition-colors">查看季集 →</span>
+        <span class="text-muted group-hover:text-fg transition-colors">查看季集 →</span>
       </div>
     </div>
   </article>

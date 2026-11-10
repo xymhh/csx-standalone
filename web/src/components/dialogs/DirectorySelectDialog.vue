@@ -4,7 +4,7 @@ import { Folder, FolderPlus } from '@lucide/vue'
 import Dialog from '@/components/ui/Dialog.vue'
 import Button from '@/components/ui/Button.vue'
 import DirectoryTreeNode from '@/components/dialogs/DirectoryTreeNode.vue'
-import { drivesApi, type Account, type DriveFolder } from '@/lib/api'
+import { drivesApi, type Account, type DriveFolder } from '@/api/drives'
 import { useToast } from '@/composables/useToast'
 
 const props = defineProps<{ open: boolean; accounts: Account[]; accountId?: number | null }>()
@@ -219,7 +219,7 @@ onMounted(() => { if (props.open) void loadRoot() })
           <p v-if="createError" class="px-1 text-xs text-rose-400">{{ createError }}</p>
         </div>
         <div class="max-h-[55vh] overflow-y-auto rounded-xl border border-border/70 bg-bg/40 p-2 space-y-1">
-          <button type="button" class="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-left text-sm text-fg hover:bg-surface-2 transition-colors" :class="selected === '/' ? 'bg-surface-2 font-medium text-white' : ''" @click="chooseRoot">
+          <button type="button" class="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-left text-sm text-fg hover:bg-surface-2 transition-colors" :class="selected === '/' ? 'bg-surface-2 font-medium text-fg' : ''" @click="chooseRoot">
             <Folder class="h-4 w-4 text-primary" />
             <span>网盘根目录 (/)</span>
           </button>

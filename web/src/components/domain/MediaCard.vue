@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ProgressItem } from '@/lib/api';import Badge from '@/components/ui/Badge.vue';defineProps<{media:ProgressItem}>()
+import type { ProgressItem } from '@/api/subscriptions';import Badge from '@/components/ui/Badge.vue';defineProps<{media:ProgressItem}>()
 </script>
 <template>
   <article class="surface-card group relative overflow-hidden p-5">

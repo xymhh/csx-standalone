@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { AlertTriangle, Film, RefreshCw, X } from '@lucide/vue'
 
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
-import type { TransferTaskEnriched } from '@/lib/api'
+import { useNow } from '@/composables/useNow'
+import type { TransferTaskEnriched } from '@/api/transfer'
 import {
   elapsedLabel,
   mediaTypeLabel,
@@ -24,15 +25,8 @@ const props = defineProps<{
 const emit = defineEmits<{ retry: [id: number]; cancel: [id: number] }>()
 
 const posterBroken = ref(false)
-const tick = ref(Date.now())
-let timer: ReturnType<typeof setInterval> | undefined
-
-onMounted(() => {
-  timer = setInterval(() => (tick.value = Date.now()), 30000)
-})
-onUnmounted(() => {
-  if (timer) clearInterval(timer)
-})
+// 每 30 秒刷新一次「已等待」文案的相对时间
+const tick = useNow(30_000)
 
 const STEPS = [
   { keys: ['checking'], label: '校验分享' },
@@ -83,16 +77,16 @@ function duration(task: TransferTaskEnriched): string {
 
 <template>
   <article
-    class="group relative overflow-hidden rounded-2xl border border-white/[0.07] bg-surface/40 p-4 transition-colors hover:border-white/[0.12]"
+    class="group relative overflow-hidden rounded-2xl border border-primary/[0.07] bg-surface/40 p-4 transition-colors hover:border-primary/[0.12]"
   >
     <div
-      class="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent"
+      class="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/15 to-transparent"
     />
 
     <div class="flex gap-4">
       <!-- 海报 -->
       <div
-        class="relative h-[68px] w-[48px] shrink-0 overflow-hidden rounded-lg bg-gradient-to-br from-zinc-800 to-zinc-900 ring-1 ring-white/[0.06]"
+        class="relative h-[68px] w-[48px] shrink-0 overflow-hidden rounded-lg bg-gradient-to-br from-surface-2 to-surface-solid ring-1 ring-primary/[0.06]"
       >
         <img
           v-if="posterUrl && !posterBroken"
@@ -102,7 +96,7 @@ function duration(task: TransferTaskEnriched): string {
           loading="lazy"
           @error="posterBroken = true"
         />
-        <Film v-else class="absolute inset-0 m-auto h-5 w-5 text-zinc-600" />
+        <Film v-else class="absolute inset-0 m-auto h-5 w-5 text-faint" />
       </div>
 
       <div class="min-w-0 flex-1">
@@ -123,17 +117,17 @@ function duration(task: TransferTaskEnriched): string {
           <li
             v-for="task in tasks"
             :key="task.id"
-            class="rounded-xl border border-white/[0.05] bg-white/[0.02] px-3 py-2.5"
+            class="rounded-xl border border-primary/[0.05] bg-primary/[0.02] px-3 py-2.5"
           >
             <div class="flex items-start gap-2">
               <span
                 v-if="task.media_type !== 'movie' && shortEpisodeLabel(task.season, task.episode)"
-                class="mt-[3px] shrink-0 rounded-md bg-white/[0.06] px-1.5 py-0.5 font-mono text-[10px] text-zinc-300"
+                class="mt-[3px] shrink-0 rounded-md bg-primary/[0.06] px-1.5 py-0.5 font-mono text-[10px] text-fg-2"
               >
                 {{ shortEpisodeLabel(task.season, task.episode) }}
               </span>
               <span
-                class="line-clamp-2 min-w-0 flex-1 text-xs leading-5 text-zinc-200"
+                class="line-clamp-2 min-w-0 flex-1 text-xs leading-5 text-fg-2"
                 :title="task.display_name"
               >
                 {{ task.display_name }}
@@ -158,7 +152,7 @@ function duration(task: TransferTaskEnriched): string {
               <template v-for="(step, index) in STEPS" :key="step.label">
                 <div
                   class="h-1 w-7 rounded-full transition-colors"
-                  :class="index <= stepIndex(task) ? 'bg-sky-400/60' : 'bg-white/[0.06]'"
+                  :class="index <= stepIndex(task) ? 'bg-sky-400/60' : 'bg-primary/[0.06]'"
                 />
               </template>
             </div>
@@ -185,7 +179,7 @@ function duration(task: TransferTaskEnriched): string {
                   v-if="task.state === 'queued'"
                   variant="ghost"
                   size="sm"
-                  class="text-zinc-400 hover:text-rose-300"
+                  class="text-muted hover:text-rose-300"
                   @click="emit('cancel', task.id)"
                 >
                   <X class="h-3.5 w-3.5" />

@@ -116,9 +116,10 @@ def test_library_servers_returns_live_probe_state(client, monkeypatch):
         def close(self):
             pass
 
-    from csx.api.routes import resources
+    from csx.api.routes import library
 
-    monkeypatch.setattr(resources, "server_clients", lambda _config: [FakeServer()])
+    # server_clients 随 library_servers 一起搬到了 library 模块，打桩目标随之迁移（断言不变）
+    monkeypatch.setattr(library, "server_clients", lambda _config: [FakeServer()])
     response = client.get("/api/v1/library/servers")
     assert response.status_code == 200 and response.json()["ok"] is True
     states = {item["provider"]: item for item in response.json()["data"]}

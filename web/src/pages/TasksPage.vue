@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
 import { DownloadCloud, HardDrive, Layers, Plus, RefreshCw, Trash2 } from '@lucide/vue'
 
 import Badge from '@/components/ui/Badge.vue'
@@ -12,16 +13,9 @@ import TaskQueueCard from '@/components/domain/TaskQueueCard.vue'
 import TransferHistory from '@/components/domain/TransferHistory.vue'
 import { useEvents } from '@/composables/useEvents'
 import { useToast } from '@/composables/useToast'
-import {
-  accountsApi,
-  candidatesApi,
-  offlineApi,
-  tasksApi,
-  type Account,
-  type Candidate,
-  type OfflineTask,
-  type TransferTaskEnriched,
-} from '@/lib/api'
+import { accountsApi, offlineApi } from '@/api/drives'
+import { candidatesApi } from '@/api/subscriptions'
+import { tasksApi, type TransferTaskEnriched } from '@/api/transfer'
 
 const tabs = [
   { value: 'queue', label: '正在转存' },
@@ -31,11 +25,7 @@ const tabs = [
 ]
 const activeTab = ref('queue')
 
-const rows = ref<TransferTaskEnriched[]>([])
 const historyRef = ref<InstanceType<typeof TransferHistory> | null>(null)
-const candidates = ref<Candidate[]>([])
-const offlineTasks = ref<OfflineTask[]>([])
-const accounts = ref<Account[]>([])
 const selectedAccountId = ref<string>('')
 const { toast } = useToast()
 
@@ -43,14 +33,22 @@ const { toast } = useToast()
 const addOpen = ref(false)
 const magnetUrl = ref('')
 const adding = ref(false)
-const loadingOffline = ref(false)
+
+// 转存队列（与「我的追剧」共用 ['tasks'] 查询）
+const queueQuery = useQuery({
+  queryKey: ['tasks'],
+  queryFn: () => tasksApi.list(),
+})
+const rows = computed(() => queueQuery.data.value ?? [])
+watch(
+  () => queueQuery.error.value,
+  (cause) => {
+    if (cause) toast(cause instanceof Error ? cause.message : '加载转存队列失败', 'error')
+  },
+)
 
 async function loadQueue() {
-  try {
-    rows.value = await tasksApi.list()
-  } catch (cause) {
-    toast(cause instanceof Error ? cause.message : '加载转存队列失败', 'error')
-  }
+  await queueQuery.refetch()
 }
 
 // 同一部影视的任务合并成一张卡，和「我的追剧」的媒体视角一致
@@ -102,37 +100,51 @@ const queueSummary = computed(() => {
   return parts.join(' · ')
 })
 
+// 待选资源：切到该页签才加载
+const candidatesQuery = useQuery({
+  queryKey: ['candidates', 'discovered'],
+  queryFn: () => candidatesApi.list({ state: 'discovered' }),
+  enabled: computed(() => activeTab.value === 'candidates'),
+})
+const candidates = computed(() => candidatesQuery.data.value ?? [])
+
 async function loadCandidates() {
-  candidates.value = await candidatesApi.list({ state: 'discovered' })
+  await candidatesQuery.refetch()
 }
 
+// 网盘账号（与设置页共用 ['accounts'] 查询）；加载后默认选第一个 115 账号
+const accountsQuery = useQuery({
+  queryKey: ['accounts'],
+  queryFn: () => accountsApi.list(),
+})
+const accounts = computed(() => accountsQuery.data.value ?? [])
 const p115Accounts = computed(() => accounts.value.filter((a) => a.provider.toLowerCase() === '115'))
+watch(accounts, (list) => {
+  if (!selectedAccountId.value && list.length > 0) {
+    const first115 = list.filter((a) => a.provider.toLowerCase() === '115')
+    if (first115.length > 0) selectedAccountId.value = String(first115[0].id)
+  }
+})
 
-async function loadAccounts() {
-  try {
-    accounts.value = await accountsApi.list()
-    if (!selectedAccountId.value && p115Accounts.value.length > 0) {
-      selectedAccountId.value = String(p115Accounts.value[0].id)
-    }
-  } catch {}
-}
+// 115 云端离线：切到该页签且已选账号时按账号加载
+const offlineQuery = useQuery({
+  queryKey: computed(() => ['offline', selectedAccountId.value] as const),
+  queryFn: () => offlineApi.tasks(Number(selectedAccountId.value)),
+  enabled: computed(() => activeTab.value === 'offline' && !!selectedAccountId.value),
+})
+const offlineTasks = computed(() => offlineQuery.data.value ?? [])
+const loadingOffline = computed(() => offlineQuery.isFetching.value)
+watch(
+  () => offlineQuery.error.value,
+  (cause) => {
+    if (cause) toast(cause instanceof Error ? cause.message : '获取离线任务失败', 'error')
+  },
+)
 
 async function loadOffline() {
   if (!selectedAccountId.value) return
-  loadingOffline.value = true
-  try {
-    offlineTasks.value = await offlineApi.tasks(Number(selectedAccountId.value))
-  } catch (cause) {
-    toast(cause instanceof Error ? cause.message : '获取离线任务失败', 'error')
-  } finally {
-    loadingOffline.value = false
-  }
+  await offlineQuery.refetch()
 }
-
-onMounted(() => {
-  void loadQueue()
-  void loadAccounts()
-})
 
 useEvents((e) => {
   if (e.type === 'task_status') {
@@ -354,7 +366,7 @@ async function deleteOffline(hash: string) {
             required
             rows="4"
             placeholder="粘贴磁力链接 magnet:?xt=... 或 http/https/ftp 下载地址"
-            class="w-full rounded-xl border border-border bg-bg/80 p-3 font-mono text-xs leading-5 text-fg focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+            class="w-full rounded-xl border border-border bg-bg/80 p-3 font-mono text-xs leading-5 text-fg focus:border-subtle focus:outline-none focus:ring-1 focus:ring-subtle"
           />
           <span class="text-xs text-muted">提交后 115 云端服务器将自动离线下载</span>
         </label>

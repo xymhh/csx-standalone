@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
 import { AlertTriangle, ChevronDown, Film, Inbox, RefreshCw, RotateCcw, Search } from '@lucide/vue'
 
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import Select from '@/components/ui/Select.vue'
-import { historyApi, type HistoryGroup, type HistoryPage, type TransferTaskEnriched } from '@/lib/api'
+import { historyApi, type HistoryGroup, type TransferTaskEnriched } from '@/api/transfer'
 import {
   episodeLabel,
   failureDetailText,
@@ -20,13 +21,12 @@ import { useToast } from '@/composables/useToast'
 
 const { toast } = useToast()
 
-const loading = ref(false)
-const data = ref<HistoryPage | null>(null)
 const page = ref(1)
 const pageSize = ref(20)
 const stateFilter = ref<'all' | 'succeeded' | 'failed' | 'skipped'>('all')
 const providerFilter = ref('')
 const keyword = ref('')
+const debouncedKeyword = ref('')
 const expanded = ref(new Set<string>())
 const retryingAll = ref(false)
 const brokenPosters = ref(new Set<string>())
@@ -55,62 +55,78 @@ const providerOptions = computed(() => [
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 
-async function load() {
-  loading.value = true
-  try {
-    data.value = await historyApi.list({
+// 筛选/分页条件即查询键：任一条件变化自动重新拉取（搜索词经 300ms 防抖后进入查询键）
+const historyQuery = useQuery({
+  queryKey: computed(
+    () =>
+      [
+        'history',
+        page.value,
+        pageSize.value,
+        stateFilter.value,
+        providerFilter.value,
+        debouncedKeyword.value,
+      ] as const,
+  ),
+  queryFn: () =>
+    historyApi.list({
       page: page.value,
       page_size: pageSize.value,
       state: stateFilter.value === 'all' ? undefined : stateFilter.value,
       provider: providerFilter.value || undefined,
-      q: keyword.value.trim() || undefined,
-    })
-    if (page.value > totalPages.value) {
-      page.value = totalPages.value
-      await load()
-    }
-  } catch (cause) {
-    toast(cause instanceof Error ? cause.message : '加载转存历史失败', 'error')
-  } finally {
-    loading.value = false
+      q: debouncedKeyword.value || undefined,
+    }),
+})
+const data = computed(() => historyQuery.data.value ?? null)
+const loading = computed(() => historyQuery.isFetching.value)
+
+watch(
+  () => historyQuery.error.value,
+  (cause) => {
+    if (cause) toast(cause instanceof Error ? cause.message : '加载转存历史失败', 'error')
+  },
+)
+// 当前页超出总页数时回退到最后一页（与改造前 load 内的钳制逻辑一致）
+watch(data, (value) => {
+  if (value && page.value > totalPages.value) {
+    page.value = totalPages.value
   }
+})
+
+async function load() {
+  await historyQuery.refetch()
 }
 
-onMounted(load)
 defineExpose({ reload: load })
 
 function setStateFilter(value: (typeof STATE_FILTERS)[number]['value']) {
   if (stateFilter.value === value) return
   stateFilter.value = value
   page.value = 1
-  void load()
 }
 
 function onProviderChange(value: string) {
   providerFilter.value = value
   page.value = 1
-  void load()
 }
 
 function onKeywordInput(value: string) {
   keyword.value = value
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
+    debouncedKeyword.value = keyword.value.trim()
     page.value = 1
-    void load()
   }, 300)
 }
 
 function onPageSizeChange(value: string) {
   pageSize.value = Number(value)
   page.value = 1
-  void load()
 }
 
 function goto(target: number) {
   if (target < 1 || target > totalPages.value || target === page.value) return
   page.value = target
-  void load()
 }
 
 function toggle(key: string) {
@@ -195,7 +211,7 @@ async function retryAllFailed() {
   <div class="space-y-4">
     <!-- 筛选栏 -->
     <div
-      class="flex flex-col gap-3 rounded-2xl border border-white/[0.07] bg-surface/40 p-3 lg:flex-row lg:items-center"
+      class="flex flex-col gap-3 rounded-2xl border border-primary/[0.07] bg-surface/40 p-3 lg:flex-row lg:items-center"
     >
       <div class="flex items-center gap-1 overflow-x-auto scrollbar-none">
         <button
@@ -205,8 +221,8 @@ async function retryAllFailed() {
           class="shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors"
           :class="
             stateFilter === item.value
-              ? 'bg-white/10 text-white ring-1 ring-white/10'
-              : 'text-zinc-400 hover:text-zinc-200'
+              ? 'bg-primary/10 text-fg ring-1 ring-primary/10'
+              : 'text-muted hover:text-fg-2'
           "
           @click="setStateFilter(item.value)"
         >
@@ -274,12 +290,12 @@ async function retryAllFailed() {
       <article
         v-for="group in groups"
         :key="group.key"
-        class="overflow-hidden rounded-2xl border border-white/[0.07] bg-surface/40"
+        class="overflow-hidden rounded-2xl border border-primary/[0.07] bg-surface/40"
         :class="group.counts.failed ? 'ring-1 ring-rose-500/10' : ''"
       >
         <button
           type="button"
-          class="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-white/[0.03]"
+          class="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-primary/[0.03]"
           @click="toggle(group.key)"
         >
           <ChevronDown
@@ -288,7 +304,7 @@ async function retryAllFailed() {
           />
 
           <div
-            class="relative h-14 w-10 shrink-0 overflow-hidden rounded-md bg-gradient-to-br from-zinc-800 to-zinc-900 ring-1 ring-white/[0.06]"
+            class="relative h-14 w-10 shrink-0 overflow-hidden rounded-md bg-gradient-to-br from-surface-2 to-surface-solid ring-1 ring-primary/[0.06]"
           >
             <img
               v-if="posterVisible(group)"
@@ -298,7 +314,7 @@ async function retryAllFailed() {
               loading="lazy"
               @error="markPosterBroken(group.key)"
             />
-            <Film v-else class="absolute inset-0 m-auto h-4 w-4 text-zinc-600" />
+            <Film v-else class="absolute inset-0 m-auto h-4 w-4 text-faint" />
           </div>
 
           <div class="min-w-0 flex-1">
@@ -346,11 +362,11 @@ async function retryAllFailed() {
         </button>
 
         <!-- 展开明细 -->
-        <div v-if="isExpanded(group.key)" class="border-t border-white/[0.06] bg-black/20">
+        <div v-if="isExpanded(group.key)" class="border-t border-primary/[0.06] bg-bg/20">
           <div
             v-for="record in group.records"
             :key="record.id"
-            class="border-b border-white/[0.04] px-3 py-2.5 transition-colors last:border-b-0 hover:bg-white/[0.02] sm:px-4"
+            class="border-b border-primary/[0.04] px-3 py-2.5 transition-colors last:border-b-0 hover:bg-primary/[0.02] sm:px-4"
           >
             <!-- 桌面：一行看全（集号/文件名/大小/来源/画质/状态/失败原因/时间） -->
             <div class="hidden items-center gap-3 md:flex">
@@ -358,7 +374,7 @@ async function retryAllFailed() {
                 {{ episodeText(record) }}
               </span>
               <span
-                class="min-w-0 flex-1 truncate text-xs text-zinc-300"
+                class="min-w-0 flex-1 truncate text-xs text-fg-2"
                 :title="record.display_name"
               >
                 {{ record.display_name }}
@@ -400,7 +416,7 @@ async function retryAllFailed() {
             <!-- 移动端：文件名独立占行，元信息折到第二行 -->
             <div class="flex items-start gap-2.5 md:hidden">
               <div class="min-w-0 flex-1">
-                <p class="line-clamp-2 text-xs leading-5 text-zinc-300">
+                <p class="line-clamp-2 text-xs leading-5 text-fg-2">
                   {{ record.display_name }}
                 </p>
                 <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-subtle">

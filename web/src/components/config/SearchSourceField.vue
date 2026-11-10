@@ -242,14 +242,14 @@ function numberValue(event: Event) {
       <span
         v-for="item in selectedItems"
         :key="item.value"
-        class="inline-flex items-center gap-1 rounded-md bg-white/[0.08] px-2 py-0.5 text-[11px] text-zinc-200"
+        class="inline-flex items-center gap-1 rounded-md bg-primary/[0.08] px-2 py-0.5 text-[11px] text-fg-2"
       >
         {{ item.title }}
-        <button type="button" class="text-zinc-500 hover:text-rose-400 cursor-pointer" @click="removeMulti(item.value)">×</button>
+        <button type="button" class="text-subtle hover:text-rose-400 cursor-pointer" @click="removeMulti(item.value)">×</button>
       </span>
       <button
         type="button"
-        class="inline-flex items-center rounded-md border border-dashed border-white/20 px-2 py-0.5 text-[11px] text-zinc-400 hover:text-white hover:border-white/40 cursor-pointer"
+        class="inline-flex items-center rounded-md border border-dashed border-primary/20 px-2 py-0.5 text-[11px] text-muted hover:text-fg hover:border-primary/40 cursor-pointer"
         @click="multiOpen = !multiOpen"
       >
         {{ multiOpen ? '收起' : selectedItems.length ? '继续选择' : '选择' }}
@@ -257,19 +257,19 @@ function numberValue(event: Event) {
       <button
         v-if="selectedValues.length"
         type="button"
-        class="text-[11px] text-zinc-500 hover:text-zinc-300 cursor-pointer"
+        class="text-[11px] text-subtle hover:text-fg-2 cursor-pointer"
         @click="emit('update:modelValue', [])"
       >
         清空
       </button>
     </div>
-    <div v-if="multiOpen" class="rounded-lg border border-white/10 bg-black/40 p-2 space-y-2">
+    <div v-if="multiOpen" class="rounded-lg border border-primary/10 bg-bg/40 p-2 space-y-2">
       <Input v-if="field.searchable !== false" v-model="multiSearch" placeholder="搜索…" class="h-8 text-xs" />
       <div class="max-h-44 overflow-y-auto space-y-0.5">
         <label
           v-for="item in filteredItems"
           :key="item.value"
-          class="flex items-center gap-2 rounded px-2 py-1 text-[11px] text-zinc-300 hover:bg-white/[0.06] cursor-pointer"
+          class="flex items-center gap-2 rounded px-2 py-1 text-[11px] text-fg-2 hover:bg-primary/[0.06] cursor-pointer"
         >
           <input
             type="checkbox"
@@ -279,7 +279,7 @@ function numberValue(event: Event) {
           />
           <span class="truncate">{{ item.title }}</span>
         </label>
-        <p v-if="!filteredItems.length" class="px-2 py-1.5 text-[11px] text-zinc-500">没有可选项</p>
+        <p v-if="!filteredItems.length" class="px-2 py-1.5 text-[11px] text-subtle">没有可选项</p>
       </div>
     </div>
   </div>
@@ -292,14 +292,14 @@ function numberValue(event: Event) {
     <span
       v-for="(tag, index) in tags"
       :key="`${tag}-${index}`"
-      class="inline-flex items-center gap-1 rounded bg-white/[0.08] px-1.5 py-0.5 text-[11px] text-zinc-200"
+      class="inline-flex items-center gap-1 rounded bg-primary/[0.08] px-1.5 py-0.5 text-[11px] text-fg-2"
     >
       {{ tag }}
-      <button type="button" class="text-zinc-500 hover:text-rose-400 cursor-pointer" @click="emit('update:modelValue', tags.filter((_, i) => i !== index))">×</button>
+      <button type="button" class="text-subtle hover:text-rose-400 cursor-pointer" @click="emit('update:modelValue', tags.filter((_, i) => i !== index))">×</button>
     </span>
     <input
       v-model="tagDraft"
-      class="h-6 min-w-[80px] flex-1 bg-transparent text-xs text-white outline-none placeholder:text-zinc-600"
+      class="h-6 min-w-[80px] flex-1 bg-transparent text-xs text-fg outline-none placeholder:text-faint"
       :placeholder="tags.length ? '' : field.placeholder || '输入后回车添加'"
       @keydown="onTagKeydown"
       @blur="addTags(tagDraft)"
@@ -311,13 +311,13 @@ function numberValue(event: Event) {
     <div
       v-for="(value, index) in orderValues"
       :key="`${value}-${index}`"
-      class="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1"
+      class="flex items-center gap-1.5 rounded-lg border border-primary/10 bg-primary/[0.03] px-2 py-1"
     >
-      <span class="w-4 text-center text-[10px] text-zinc-500">{{ index + 1 }}</span>
-      <span class="flex-1 truncate text-xs text-zinc-200">{{ value }}</span>
-      <button type="button" class="px-1 text-zinc-500 hover:text-white cursor-pointer disabled:opacity-30" :disabled="index === 0" @click="moveOrder(index, -1)">↑</button>
-      <button type="button" class="px-1 text-zinc-500 hover:text-white cursor-pointer disabled:opacity-30" :disabled="index === orderValues.length - 1" @click="moveOrder(index, 1)">↓</button>
-      <button type="button" class="px-1 text-zinc-500 hover:text-rose-400 cursor-pointer" @click="removeOrder(index)">×</button>
+      <span class="w-4 text-center text-[10px] text-subtle">{{ index + 1 }}</span>
+      <span class="flex-1 truncate text-xs text-fg-2">{{ value }}</span>
+      <button type="button" class="px-1 text-subtle hover:text-fg cursor-pointer disabled:opacity-30" :disabled="index === 0" @click="moveOrder(index, -1)">↑</button>
+      <button type="button" class="px-1 text-subtle hover:text-fg cursor-pointer disabled:opacity-30" :disabled="index === orderValues.length - 1" @click="moveOrder(index, 1)">↓</button>
+      <button type="button" class="px-1 text-subtle hover:text-rose-400 cursor-pointer" @click="removeOrder(index)">×</button>
     </div>
     <div class="flex gap-1.5">
       <Input v-model="orderDraft" :placeholder="field.placeholder || '添加字幕组 / 关键词'" class="h-8 text-xs" @keydown.enter="addOrder" />
@@ -327,7 +327,7 @@ function numberValue(event: Event) {
 
   <!-- 在线文档 -->
   <div v-else-if="field.type === 'online-documents'" class="space-y-2">
-    <div v-for="(doc, index) in documents" :key="index" class="rounded-lg border border-white/10 bg-white/[0.03] p-2.5 space-y-2">
+    <div v-for="(doc, index) in documents" :key="index" class="rounded-lg border border-primary/10 bg-primary/[0.03] p-2.5 space-y-2">
       <div class="flex items-center gap-1.5">
         <Input
           :model-value="doc.url"
@@ -344,7 +344,7 @@ function numberValue(event: Event) {
           :key="type.value"
           type="button"
           class="rounded px-1.5 py-0.5 text-[10px] transition-colors cursor-pointer"
-          :class="doc.resource_types.includes(type.value) ? 'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/30' : 'bg-white/[0.05] text-zinc-400 hover:text-white'"
+          :class="doc.resource_types.includes(type.value) ? 'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/30' : 'bg-primary/[0.05] text-muted hover:text-fg'"
           @click="toggleDocType(index, type.value)"
         >
           {{ type.title }}
@@ -356,15 +356,15 @@ function numberValue(event: Event) {
   <!-- 账户信息 -->
   <div
     v-else-if="field.type === 'account'"
-    class="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5"
+    class="rounded-xl border border-primary/10 bg-primary/[0.03] px-3 py-2.5"
   >
     <div v-if="account?.connected" class="flex items-center gap-3">
       <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-[11px] font-semibold text-emerald-300">
         {{ (account.name || '?').slice(0, 1).toUpperCase() }}
       </div>
       <div class="min-w-0 flex-1">
-        <p class="truncate text-xs font-medium text-white">{{ account.name || account.username || '已登录' }}</p>
-        <div class="flex flex-wrap items-center gap-2 text-[11px] text-zinc-400">
+        <p class="truncate text-xs font-medium text-fg">{{ account.name || account.username || '已登录' }}</p>
+        <div class="flex flex-wrap items-center gap-2 text-[11px] text-muted">
           <span v-if="account.level">{{ account.level }}</span>
           <span v-if="account.points !== null && account.points !== undefined">{{ account.points }} 积分</span>
           <span v-if="account.email" class="truncate">{{ account.email }}</span>
@@ -375,7 +375,7 @@ function numberValue(event: Event) {
       </Button>
     </div>
     <div v-else class="flex items-center justify-between gap-3">
-      <p class="text-[11px] text-zinc-500">{{ account?.error || '保存账户配置后可读取账户信息' }}</p>
+      <p class="text-[11px] text-subtle">{{ account?.error || '保存账户配置后可读取账户信息' }}</p>
       <Button variant="outline" size="sm" class="h-7 shrink-0 text-[11px]" :disabled="accountRefreshing" @click="emit('refresh-account')">
         {{ accountRefreshing ? '读取中…' : '读取' }}
       </Button>
@@ -383,10 +383,10 @@ function numberValue(event: Event) {
   </div>
 
   <!-- HDHive OAuth -->
-  <div v-else-if="field.type === 'hdhive-oauth'" class="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+  <div v-else-if="field.type === 'hdhive-oauth'" class="space-y-2 rounded-xl border border-primary/10 bg-primary/[0.03] p-3">
     <div class="flex flex-wrap items-center gap-2">
       <Badge :tone="oauthBusy === 'exchange' ? 'muted' : 'muted'" class="text-[10px]">授权范围 query unlock write</Badge>
-      <span class="text-[11px] text-zinc-500">先在 HDHive 开放平台登记 Redirect URI，再发起授权。</span>
+      <span class="text-[11px] text-subtle">先在 HDHive 开放平台登记 Redirect URI，再发起授权。</span>
     </div>
     <Input
       :model-value="oauthCallback"
@@ -428,7 +428,7 @@ function numberValue(event: Event) {
       :model-value="modelValue === null || modelValue === undefined ? '' : String(modelValue)"
       @input="numberValue"
     />
-    <span v-if="field.suffix" class="shrink-0 text-[11px] text-zinc-500">{{ field.suffix }}</span>
+    <span v-if="field.suffix" class="shrink-0 text-[11px] text-subtle">{{ field.suffix }}</span>
   </div>
 
   <!-- 密码 -->
@@ -442,7 +442,7 @@ function numberValue(event: Event) {
     />
     <button
       type="button"
-      class="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-zinc-500 hover:text-zinc-300 cursor-pointer"
+      class="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-subtle hover:text-fg-2 cursor-pointer"
       @click="showPassword = !showPassword"
     >
       {{ showPassword ? '隐藏' : '显示' }}
@@ -455,7 +455,7 @@ function numberValue(event: Event) {
     :value="String(modelValue ?? '')"
     :placeholder="field.placeholder"
     rows="2"
-    class="w-full rounded-lg border border-border bg-surface/80 px-3 py-2 text-xs text-white outline-none placeholder:text-zinc-600 focus-visible:border-focus"
+    class="w-full rounded-lg border border-border bg-surface/80 px-3 py-2 text-xs text-fg outline-none placeholder:text-faint focus-visible:border-focus"
     @input="emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
   />
 

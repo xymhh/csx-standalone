@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-import { authApi } from '@/lib/api'
+import { setUnauthorizedHandler } from '@/api/client'
+import { pinia } from '@/stores'
+import { useAuthStore } from '@/stores/auth'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -35,14 +37,16 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   if (to.meta.public) return true
   try {
-    await authApi.me()
+    await useAuthStore(pinia).fetchMe()
     return true
   } catch {
     return { name: 'login', query: { next: to.fullPath } }
   }
 })
 
-window.addEventListener('csx:unauthorized', () => {
+// API 层遇到 401 时的统一处理：清登录态并跳登录页（替代原 CustomEvent 事件总线）
+setUnauthorizedHandler(() => {
+  useAuthStore(pinia).clear()
   if (router.currentRoute.value.name !== 'login') {
     void router.push({ name: 'login' })
   }

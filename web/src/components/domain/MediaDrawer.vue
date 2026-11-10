@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
 import {
   X,
   RefreshCw,
@@ -19,38 +20,39 @@ import { posterSrc } from '@/lib/poster'
 import Button from '@/components/ui/Button.vue'
 import EpisodeMatrix from '@/components/domain/EpisodeMatrix.vue'
 import Tabs from '@/components/ui/Tabs.vue'
-import { progressApi, type ProgressItem, type ProgressSeason } from '@/lib/api'
+import { progressApi, type ProgressSeason } from '@/api/subscriptions'
 import { useToast } from '@/composables/useToast'
 
 const props = defineProps<{ open: boolean; mediaId: number | null }>()
 const emit = defineEmits<{ close: [] }>()
 
-const media = ref<ProgressItem | null>(null)
-const loading = ref(false)
-const error = ref('')
 const activeSeasonTab = ref('1')
 const viewMode = ref<'matrix' | 'files'>('matrix')
 const copiedPath = ref<string | null>(null)
 const { toast } = useToast()
 
+// 打开抽屉或切换媒体时加载详情；每次成功加载后把季选项卡重置到第一季
+const detailQuery = useQuery({
+  queryKey: computed(() => ['progress', 'detail', props.mediaId] as const),
+  queryFn: () => progressApi.getDetail(props.mediaId as number),
+  enabled: computed(() => props.open && !!props.mediaId),
+})
+const media = computed(() => detailQuery.data.value ?? null)
+const loading = computed(() => detailQuery.isFetching.value)
+const error = computed(() =>
+  detailQuery.error.value
+    ? detailQuery.error.value instanceof Error
+      ? detailQuery.error.value.message
+      : '剧集详情加载失败'
+    : '',
+)
 watch(
-  () => [props.open, props.mediaId] as const,
-  async ([open, id]) => {
-    if (!open || !id) return
-    loading.value = true
-    error.value = ''
-    try {
-      media.value = await progressApi.getDetail(id)
-      if (media.value?.seasons?.length) {
-        activeSeasonTab.value = String(media.value.seasons[0].season)
-      }
-    } catch (cause) {
-      error.value = cause instanceof Error ? cause.message : '剧集详情加载失败'
-    } finally {
-      loading.value = false
+  () => detailQuery.data.value,
+  (value) => {
+    if (value?.seasons?.length) {
+      activeSeasonTab.value = String(value.seasons[0].season)
     }
   },
-  { immediate: true },
 )
 
 const currentSeason = () =>
@@ -71,23 +73,23 @@ function copyFilePath(path: string) {
     <!-- 苹果风格全屏暗色毛玻璃遮罩 -->
     <div
       v-if="open"
-      class="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xl transition-opacity duration-300"
+      class="fixed inset-0 z-50 flex justify-end bg-bg/60 backdrop-blur-xl transition-opacity duration-300"
       @click.self="emit('close')"
     >
       <!-- macOS Sequoia 风格侧滑大抽屉 (Sheet) -->
       <section
         role="dialog"
         aria-modal="true"
-        class="relative flex h-full w-full max-w-2xl flex-col border-l border-white/[0.08] bg-zinc-950/95 shadow-2xl backdrop-blur-2xl transition-transform duration-300 ease-out"
+        class="relative flex h-full w-full max-w-2xl flex-col border-l border-primary/[0.08] bg-canvas/95 shadow-2xl backdrop-blur-2xl transition-transform duration-300 ease-out"
       >
         <!-- 头部导航与关闭按钮 -->
-        <header class="flex h-14 items-center justify-between border-b border-white/[0.08] px-6">
-          <div class="flex items-center gap-2 text-xs text-zinc-400">
-            <Film class="h-4 w-4 text-zinc-300" />
-            <span class="font-medium text-white">{{ media?.title || '剧集详情' }}</span>
+        <header class="flex h-14 items-center justify-between border-b border-primary/[0.08] px-6">
+          <div class="flex items-center gap-2 text-xs text-muted">
+            <Film class="h-4 w-4 text-fg-2" />
+            <span class="font-medium text-fg">{{ media?.title || '剧集详情' }}</span>
           </div>
           <button
-            class="grid h-8 w-8 place-items-center rounded-full text-zinc-400 transition-colors hover:bg-white/10 hover:text-white"
+            class="grid h-8 w-8 place-items-center rounded-full text-muted transition-colors hover:bg-primary/10 hover:text-fg"
             aria-label="关闭"
             @click="emit('close')"
           >
@@ -95,8 +97,8 @@ function copyFilePath(path: string) {
           </button>
         </header>
 
-        <div v-if="loading" class="flex flex-1 items-center justify-center p-12 text-xs text-zinc-400">
-          <RefreshCw class="mr-2 h-4 w-4 animate-spin text-white" />
+        <div v-if="loading" class="flex flex-1 items-center justify-center p-12 text-xs text-muted">
+          <RefreshCw class="mr-2 h-4 w-4 animate-spin text-fg" />
           <span>正在读取剧集与网盘文件详情…</span>
         </div>
 
@@ -105,31 +107,31 @@ function copyFilePath(path: string) {
         <div v-else-if="media" class="flex-1 space-y-6 overflow-y-auto p-6 scrollbar-thin">
           <!-- 头部海报与元数据区 -->
           <div class="flex gap-5 items-start">
-            <div class="h-40 w-28 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-zinc-900 shadow-md">
+            <div class="h-40 w-28 shrink-0 overflow-hidden rounded-xl border border-primary/10 bg-surface-solid shadow-md">
               <img
                 v-if="media.poster_url"
                 :src="posterSrc(media.poster_url)"
                 class="h-full w-full object-cover"
               />
-              <div v-else class="grid h-full w-full place-items-center text-zinc-600">
+              <div v-else class="grid h-full w-full place-items-center text-faint">
                 <Film class="h-8 w-8 opacity-40" />
               </div>
             </div>
 
             <div class="space-y-2 min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-2">
-                <h3 class="text-xl font-bold tracking-tight text-white">{{ media.title }}</h3>
+                <h3 class="text-xl font-bold tracking-tight text-fg">{{ media.title }}</h3>
                 <Badge :tone="media.missing.length ? 'warn' : 'good'">
                   {{ media.missing.length ? `缺 ${media.missing.length} 集` : '全集已入库' }}
                 </Badge>
               </div>
 
-              <p class="text-xs text-zinc-400">
+              <p class="text-xs text-muted">
                 上映：{{ media.year || '未知' }} · 类型：{{ media.type === 'movie' ? '电影' : '电视剧' }} ·
                 入库进度：{{ media.owned_count }} / {{ media.aired_count }} 集
               </p>
 
-              <p v-if="media.overview" class="text-xs text-zinc-300 leading-relaxed line-clamp-3">
+              <p v-if="media.overview" class="text-xs text-fg-2 leading-relaxed line-clamp-3">
                 {{ media.overview }}
               </p>
 
@@ -146,7 +148,7 @@ function copyFilePath(path: string) {
           </div>
 
           <!-- 季选项卡 (Segmented Control) -->
-          <div v-if="media.seasons.length > 1" class="border-t border-white/[0.06] pt-4">
+          <div v-if="media.seasons.length > 1" class="border-t border-primary/[0.06] pt-4">
             <Tabs
               v-model="activeSeasonTab"
               :items="media.seasons.map((s) => ({ value: String(s.season), label: `第 ${s.season} 季` }))"
@@ -156,14 +158,14 @@ function copyFilePath(path: string) {
           <!-- 选集状态与展示视图切换 -->
           <div class="space-y-4">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              <span class="text-xs font-semibold uppercase tracking-wider text-muted">
                 选集与真实网盘文件
               </span>
-              <div class="inline-flex rounded-lg border border-white/10 bg-zinc-900/60 p-0.5 text-xs">
+              <div class="inline-flex rounded-lg border border-primary/10 bg-surface-solid/60 p-0.5 text-xs">
                 <button
                   type="button"
                   class="rounded-md px-2.5 py-1 font-medium transition-colors"
-                  :class="viewMode === 'matrix' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400'"
+                  :class="viewMode === 'matrix' ? 'bg-surface-2 text-fg shadow-sm' : 'text-muted'"
                   @click="viewMode = 'matrix'"
                 >
                   方格矩阵
@@ -171,7 +173,7 @@ function copyFilePath(path: string) {
                 <button
                   type="button"
                   class="rounded-md px-2.5 py-1 font-medium transition-colors"
-                  :class="viewMode === 'files' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400'"
+                  :class="viewMode === 'files' ? 'bg-surface-2 text-fg shadow-sm' : 'text-muted'"
                   @click="viewMode = 'files'"
                 >
                   文件清单
@@ -192,7 +194,7 @@ function copyFilePath(path: string) {
                         ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
                         : ep.aired
                           ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
-                          : 'border-white/[0.06] bg-zinc-900/40 text-zinc-600'
+                          : 'border-primary/[0.06] bg-surface-solid/40 text-faint'
                     "
                     :title="ep.file?.path ? `已入库文件: ${ep.file.path}` : `第 ${ep.episode} 集 (待转存)`"
                   >
@@ -207,29 +209,29 @@ function copyFilePath(path: string) {
 
             <!-- 2. 文件详细清单视图（逐集网盘文件与大小） -->
             <div v-else class="space-y-2.5">
-              <div v-if="currentSeason()" class="divide-y divide-white/[0.06] rounded-xl border border-white/[0.08] bg-zinc-900/40 overflow-hidden">
+              <div v-if="currentSeason()" class="divide-y divide-primary/[0.06] rounded-xl border border-primary/[0.08] bg-surface-solid/40 overflow-hidden">
                 <div
                   v-for="ep in currentSeason()!.episodes"
                   :key="ep.episode"
-                  class="p-3 text-xs flex items-center justify-between gap-3 hover:bg-white/[0.02] transition-colors"
+                  class="p-3 text-xs flex items-center justify-between gap-3 hover:bg-primary/[0.02] transition-colors"
                 >
                   <div class="min-w-0 flex-1">
                     <div class="flex items-center gap-2">
-                      <span class="font-mono font-semibold text-white">E{{ String(ep.episode).padStart(2, '0') }}</span>
-                      <span class="truncate text-zinc-300 font-medium">{{ ep.title || `第 ${ep.episode} 集` }}</span>
+                      <span class="font-mono font-semibold text-fg">E{{ String(ep.episode).padStart(2, '0') }}</span>
+                      <span class="truncate text-fg-2 font-medium">{{ ep.title || `第 ${ep.episode} 集` }}</span>
                       <Badge :tone="ep.owned ? 'good' : 'warn'">
                         {{ ep.owned ? '已在网盘' : '待补缺集' }}
                       </Badge>
                     </div>
 
-                    <p v-if="ep.file" class="mt-1 font-mono text-[11px] text-zinc-400 truncate" :title="ep.file.path">
+                    <p v-if="ep.file" class="mt-1 font-mono text-[11px] text-muted truncate" :title="ep.file.path">
                       {{ ep.file.path }}
                     </p>
                   </div>
 
                   <div v-if="ep.file" class="flex items-center gap-2 shrink-0">
                     <Badge tone="info" class="uppercase font-mono">{{ ep.file.quality_bucket }}</Badge>
-                    <span class="font-mono text-zinc-500 tabular-num text-[11px]">
+                    <span class="font-mono text-subtle tabular-num text-[11px]">
                       {{ (ep.file.size / 1024 ** 3).toFixed(2) }} GB
                     </span>
                     <Button variant="ghost" size="sm" class="h-7 w-7 p-0" title="复制路径" @click="copyFilePath(ep.file.path)">

@@ -10,15 +10,20 @@
   --color-surface-hover: rgba(39, 39, 42, 0.8);
   --color-surface-active: rgba(63, 63, 70, 0.9);
   --color-surface-solid: #18181b;
+  /* 抬升层级（与 zinc-800/700 同值，多处组件原先以 bg-surface-2 引用此层） */
+  --color-surface-2: #27272a;
+  --color-surface-3: #3f3f46;
 
   /* 苹果极细高光内微边框 */
   --color-border: rgba(255, 255, 255, 0.08);
   --color-border-hover: rgba(255, 255, 255, 0.16);
 
-  /* 文字体系 */
+  /* 文字体系（fg-2 与 zinc-300 同值、faint 与 zinc-600 同值，补齐原硬编码色阶） */
   --color-fg: #fafafa;
+  --color-fg-2: #d4d4d8;
   --color-muted: #a1a1aa;
   --color-subtle: #71717a;
+  --color-faint: #52525c;
 
   /* 核心行动点（纯白反转） */
   --color-primary: #ffffff;

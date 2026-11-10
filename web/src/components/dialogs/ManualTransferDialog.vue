@@ -7,7 +7,7 @@ import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import DirectorySelectDialog from '@/components/dialogs/DirectorySelectDialog.vue'
 import { useToast } from '@/composables/useToast'
-import { accountsApi, drivesApi, type Account, type ShareInspectFile } from '@/lib/api'
+import { accountsApi, drivesApi, type Account, type ShareInspectFile } from '@/api/drives'
 
 const props = withDefaults(
   defineProps<{

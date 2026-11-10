@@ -32,22 +32,22 @@ const title = computed(() => titles[route.path] ?? '我的追剧')
 
 <template>
   <header
-    class="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-white/[0.06] bg-black/60 px-4 backdrop-blur-2xl sm:px-6 lg:px-8"
+    class="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-primary/[0.06] bg-bg/60 px-4 backdrop-blur-2xl sm:px-6 lg:px-8"
   >
     <div class="flex items-center gap-3">
       <button
-        class="grid h-9 w-9 place-items-center rounded-xl text-zinc-400 hover:bg-white/10 hover:text-white lg:hidden"
+        class="grid h-9 w-9 place-items-center rounded-xl text-muted hover:bg-primary/10 hover:text-fg lg:hidden"
         aria-label="打开菜单"
         @click="$emit('menu')"
       >
         <Menu class="h-5 w-5" />
       </button>
-      <h1 class="text-sm font-semibold tracking-tight text-white">{{ title }}</h1>
+      <h1 class="text-sm font-semibold tracking-tight text-fg">{{ title }}</h1>
     </div>
 
     <!-- 右侧动作区：苹果胶囊反转按钮「+ 快捷转存」与实时在线指示 -->
     <div class="flex items-center gap-4">
-      <div class="hidden sm:flex items-center gap-1.5 text-xs text-zinc-400">
+      <div class="hidden sm:flex items-center gap-1.5 text-xs text-muted">
         <span
           class="h-2 w-2 rounded-full transition-colors"
           :class="connected ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]' : 'bg-amber-400'"

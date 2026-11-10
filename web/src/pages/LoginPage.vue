@@ -4,10 +4,12 @@ import { useRoute, useRouter } from 'vue-router'
 
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
-import { ApiError, authApi } from '@/lib/api'
+import { ApiError } from '@/api/client'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const route = useRoute()
+const auth = useAuthStore()
 
 const username = ref('')
 const password = ref('')
@@ -19,7 +21,7 @@ async function submit() {
   loading.value = true
   error.value = null
   try {
-    await authApi.login(username.value, password.value)
+    await auth.login(username.value, password.value)
     const next = typeof route.query.next === 'string' ? route.query.next : '/'
     await router.replace(next)
   } catch (e) {

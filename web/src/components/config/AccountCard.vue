@@ -15,7 +15,7 @@ import {
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
 import Switch from '@/components/ui/Switch.vue'
-import type { Account } from '@/lib/api'
+import type { Account } from '@/api/drives'
 
 const props = defineProps<{
   account: Account
@@ -63,14 +63,14 @@ const usedPct = computed(() => {
     class="relative overflow-hidden rounded-2xl border transition-all duration-200"
     :class="[
       account.is_enabled
-        ? 'border-white/10 bg-zinc-900/70 shadow-sm backdrop-blur-md'
-        : 'border-white/5 bg-zinc-950/40 opacity-55',
+        ? 'border-primary/10 bg-surface-solid/70 shadow-sm backdrop-blur-md'
+        : 'border-primary/5 bg-canvas/40 opacity-55',
     ]"
   >
     <!-- 顶部状态指示横条 (启用时微光) -->
     <div
       class="h-0.5 w-full transition-colors"
-      :class="account.is_enabled ? (account.provider === '115' ? 'bg-blue-500' : 'bg-emerald-500') : 'bg-zinc-800'"
+      :class="account.is_enabled ? (account.provider === '115' ? 'bg-blue-500' : 'bg-emerald-500') : 'bg-surface-2'"
     />
 
     <div class="p-4 sm:p-5 space-y-4">
@@ -83,7 +83,7 @@ const usedPct = computed(() => {
               v-if="avatar"
               :src="avatar"
               :alt="userName"
-              class="h-11 w-11 rounded-2xl object-cover ring-1 ring-white/10 shadow-sm"
+              class="h-11 w-11 rounded-2xl object-cover ring-1 ring-primary/10 shadow-sm"
             />
             <div
               v-else
@@ -96,7 +96,7 @@ const usedPct = computed(() => {
             <!-- 右下角网盘类型角标 -->
             <span
               class="absolute -bottom-1 -right-1 px-1 py-0.2 rounded text-[9px] font-mono uppercase font-bold tracking-tighter"
-              :class="account.provider === '115' ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white'"
+              :class="account.provider === '115' ? 'bg-blue-600 text-fg' : 'bg-emerald-600 text-fg'"
             >
               {{ account.provider }}
             </span>
@@ -105,7 +105,7 @@ const usedPct = computed(() => {
           <div class="min-w-0">
             <!-- 昵称与 VIP 胶囊 -->
             <div class="flex flex-wrap items-center gap-1.5">
-              <span class="font-bold text-white text-sm tracking-tight truncate max-w-[140px] sm:max-w-[200px]">
+              <span class="font-bold text-fg text-sm tracking-tight truncate max-w-[140px] sm:max-w-[200px]">
                 {{ userName }}
               </span>
 
@@ -122,7 +122,7 @@ const usedPct = computed(() => {
               <button
                 type="button"
                 class="px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors cursor-pointer"
-                :class="account.is_primary ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30 font-semibold' : 'bg-white/5 text-zinc-500 hover:text-zinc-300 border border-white/5'"
+                :class="account.is_primary ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30 font-semibold' : 'bg-primary/5 text-subtle hover:text-fg-2 border border-primary/5'"
                 :title="account.is_primary ? '默认转存主账号' : '点击设为此网盘的默认转存主号'"
                 @click="emit('set-primary', account)"
               >
@@ -131,14 +131,14 @@ const usedPct = computed(() => {
             </div>
 
             <!-- 备注别名与连接健康态 -->
-            <p class="text-[11px] text-zinc-400 mt-0.5 flex items-center gap-1.5 truncate">
+            <p class="text-[11px] text-muted mt-0.5 flex items-center gap-1.5 truncate">
               <span
                 class="h-1.5 w-1.5 rounded-full shrink-0"
-                :class="account.is_enabled ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]' : 'bg-zinc-600'"
+                :class="account.is_enabled ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]' : 'bg-faint'"
               />
               <span class="truncate">{{ account.name || '我的网盘' }}</span>
-              <span class="text-zinc-600">·</span>
-              <span :class="account.is_enabled ? 'text-zinc-300' : 'text-zinc-500'">
+              <span class="text-faint">·</span>
+              <span :class="account.is_enabled ? 'text-fg-2' : 'text-subtle'">
                 {{ account.is_enabled ? '已启用参与调度' : '已暂停' }}
               </span>
             </p>
@@ -149,7 +149,7 @@ const usedPct = computed(() => {
         <div class="flex items-center gap-2 shrink-0">
           <button
             type="button"
-            class="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            class="p-1.5 rounded-lg text-muted hover:text-fg hover:bg-primary/10 transition-colors cursor-pointer"
             :title="loading ? '正在刷新容量…' : '刷新网盘容量与状态'"
             :disabled="loading"
             @click="emit('refresh', account.id)"
@@ -165,14 +165,14 @@ const usedPct = computed(() => {
       </div>
 
       <!-- 2. 中间容量进度条（忠实还原 CS 插件：已用 XX TB / 总 XX TB，剩余 XX TB） -->
-      <div v-if="info.total_space" class="space-y-1.5 rounded-xl bg-zinc-950/60 p-3 border border-white/[0.04] text-xs">
+      <div v-if="info.total_space" class="space-y-1.5 rounded-xl bg-canvas/60 p-3 border border-primary/[0.04] text-xs">
         <div class="flex items-center justify-between text-[11px] font-mono">
-          <span class="text-zinc-300">已用 {{ info.used_space || '0 GB' }} / {{ info.total_space }}</span>
-          <span class="text-zinc-400">剩余 {{ info.remaining_space || '未知' }}</span>
+          <span class="text-fg-2">已用 {{ info.used_space || '0 GB' }} / {{ info.total_space }}</span>
+          <span class="text-muted">剩余 {{ info.remaining_space || '未知' }}</span>
         </div>
 
         <!-- 拟物微光进度条 -->
-        <div class="h-2 w-full rounded-full bg-zinc-800/80 overflow-hidden p-0.5">
+        <div class="h-2 w-full rounded-full bg-surface-2/80 overflow-hidden p-0.5">
           <div
             class="h-full rounded-full transition-all duration-500"
             :class="account.provider === '115' ? 'bg-gradient-to-r from-blue-500 to-indigo-400 shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]'"
@@ -182,7 +182,7 @@ const usedPct = computed(() => {
       </div>
 
       <!-- 未刷新容量时的提示卡 -->
-      <div v-else class="rounded-xl bg-zinc-950/40 p-2.5 border border-white/[0.04] text-[11px] text-zinc-500 flex items-center justify-between">
+      <div v-else class="rounded-xl bg-canvas/40 p-2.5 border border-primary/[0.04] text-[11px] text-subtle flex items-center justify-between">
         <span>凭据已通过 Fernet 工业级加密存储</span>
         <button
           type="button"
@@ -196,10 +196,10 @@ const usedPct = computed(() => {
       </div>
 
       <!-- 3. 网盘转存与媒体库独立目录选择 (对齐原 CS 插件) -->
-      <div class="space-y-2 rounded-xl bg-zinc-950/40 p-3 border border-white/[0.04] text-xs">
+      <div class="space-y-2 rounded-xl bg-canvas/40 p-3 border border-primary/[0.04] text-xs">
         <div class="space-y-1">
           <div class="flex items-center justify-between text-[11px]">
-            <span class="text-zinc-400 font-medium">📦 网盘转存暂存路径</span>
+            <span class="text-muted font-medium">📦 网盘转存暂存路径</span>
             <button
               type="button"
               class="text-blue-400 hover:text-blue-300 transition-colors cursor-pointer flex items-center gap-1"
@@ -209,14 +209,14 @@ const usedPct = computed(() => {
               <span>选择目录</span>
             </button>
           </div>
-          <p class="font-mono text-[11px] text-white bg-zinc-900/80 px-2.5 py-1.5 rounded-lg border border-white/5 truncate">
+          <p class="font-mono text-[11px] text-fg bg-surface-solid/80 px-2.5 py-1.5 rounded-lg border border-primary/5 truncate">
             {{ account.transfer_path || '/CSX/_inbox' }}
           </p>
         </div>
 
-        <div class="space-y-1 pt-1 border-t border-white/[0.04]">
+        <div class="space-y-1 pt-1 border-t border-primary/[0.04]">
           <div class="flex items-center justify-between text-[11px]">
-            <span class="text-zinc-400 font-medium">🎬 媒体库归档最终路径</span>
+            <span class="text-muted font-medium">🎬 媒体库归档最终路径</span>
             <button
               type="button"
               class="text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer flex items-center gap-1"
@@ -226,19 +226,19 @@ const usedPct = computed(() => {
               <span>选择目录</span>
             </button>
           </div>
-          <p class="font-mono text-[11px] text-white bg-zinc-900/80 px-2.5 py-1.5 rounded-lg border border-white/5 truncate">
+          <p class="font-mono text-[11px] text-fg bg-surface-solid/80 px-2.5 py-1.5 rounded-lg border border-primary/5 truncate">
             {{ account.media_path || '/CSX/媒体库' }}
           </p>
         </div>
       </div>
 
       <!-- 4. 底部操作栏 -->
-      <div class="flex items-center justify-between pt-2 border-t border-white/[0.04] text-[11px] text-zinc-500">
+      <div class="flex items-center justify-between pt-2 border-t border-primary/[0.04] text-[11px] text-subtle">
         <span class="font-mono">ID: {{ account.id }} · {{ account.provider === '115' ? '115 网盘' : '夸克网盘' }}</span>
         <Button
           variant="ghost"
           size="sm"
-          class="h-6 px-2 text-[11px] text-zinc-400 hover:text-rose-400 transition-colors"
+          class="h-6 px-2 text-[11px] text-muted hover:text-rose-400 transition-colors"
           @click="emit('remove', account.id)"
         >
           <Trash2 class="mr-1 h-3 w-3" />

@@ -1,18 +1,21 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
 
 import CandidateCard from '@/components/domain/CandidateCard.vue'
 import { useToast } from '@/composables/useToast'
-import { candidatesApi, type Candidate } from '@/lib/api'
+import { candidatesApi } from '@/api/subscriptions'
 
-const rows = ref<Candidate[]>([])
 const { toast } = useToast()
+const candidatesQuery = useQuery({
+  queryKey: ['candidates', 'discovered'],
+  queryFn: () => candidatesApi.list({ state: 'discovered' }),
+})
+const rows = computed(() => candidatesQuery.data.value ?? [])
 
 async function load() {
-  rows.value = await candidatesApi.list({ state: 'discovered' })
+  await candidatesQuery.refetch()
 }
-
-onMounted(load)
 
 async function accept(id: number) {
   try {

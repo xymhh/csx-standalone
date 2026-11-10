@@ -1,20 +1,22 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
 import { ChevronDown, ChevronUp, Film } from '@lucide/vue'
 
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
 import EpisodeMatrix from '@/components/domain/EpisodeMatrix.vue'
 import MediaDrawer from '@/components/domain/MediaDrawer.vue'
-import { progressApi, type ProgressItem } from '@/lib/api'
+import { progressApi } from '@/api/subscriptions'
 
-const items = ref<ProgressItem[]>([])
+const { data } = useQuery({
+  queryKey: ['progress', 'overview'],
+  queryFn: () => progressApi.overview(),
+})
+const items = computed(() => data.value ?? [])
 const expanded = ref<Record<number, boolean>>({})
 const drawerMediaId = ref<number | null>(null)
-
-onMounted(async () => {
-  items.value = await progressApi.overview()
-})
 
 function toggle(id: number) {
   expanded.value[id] = !expanded.value[id]
@@ -31,10 +33,12 @@ function toggle(id: number) {
       <Badge tone="muted">共 {{ items.length }} 部关注中</Badge>
     </div>
 
-    <div v-if="!items.length" class="rounded-xl border border-dashed border-border/60 bg-surface/30 p-12 text-center text-xs text-muted">
-      <Film class="mx-auto mb-2 h-7 w-7 text-subtle/50" />
-      <p>暂无追剧进度数据。先去「我的订阅」添加一部剧吧！</p>
-    </div>
+    <EmptyState
+      v-if="!items.length"
+      :icon="Film"
+      title="暂无追剧进度数据"
+      description="先去「我的订阅」添加一部剧吧！"
+    />
 
     <!-- 剧集卡片流：单个卡片，不套娃 -->
     <div class="space-y-3">

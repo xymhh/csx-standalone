@@ -2,13 +2,14 @@ import asyncio
 
 from p4_helpers import login
 
-from csx.api.routes import resources
+from csx.api.routes import platform, resources
 from csx.infra.events import event_bus
 
 
 def test_sse_stream_broadcast_heartbeat_and_cleanup(client, monkeypatch):
     login(client)
-    monkeypatch.setattr(resources, "HEARTBEAT_SECONDS", 0.01)
+    # HEARTBEAT_SECONDS 随 event_stream 一起搬到了 platform 模块，打桩目标随之迁移（断言不变）
+    monkeypatch.setattr(platform, "HEARTBEAT_SECONDS", 0.01)
 
     async def exercise():
         response = await resources.event_stream()

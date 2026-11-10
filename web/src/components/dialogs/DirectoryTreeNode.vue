@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ChevronDown, ChevronRight, Folder, LoaderCircle } from '@lucide/vue'
 
-import type { DriveFolder } from '@/lib/api'
+import type { DriveFolder } from '@/api/drives'
 
 defineProps<{
   folder: DriveFolder

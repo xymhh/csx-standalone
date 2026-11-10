@@ -1,22 +1,16 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
 
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
 import Card from '@/components/ui/Card.vue'
 import Switch from '@/components/ui/Switch.vue'
 import { useToast } from '@/composables/useToast'
-import {
-  doctorApi,
-  searchSourcesApi,
-  settingsApi,
-  telegramApi,
-  type DoctorReport,
-  type TelegramParseResult,
-  type TelegramStatus,
-} from '@/lib/api'
+import { doctorApi, settingsApi, type DoctorReport } from '@/api/settings'
+import { searchSourcesApi } from '@/api/sources'
+import { telegramApi, type TelegramParseResult, type TelegramStatus } from '@/api/telegram'
 
-const report = ref<DoctorReport | null>(null)
 const checks = ref<Record<string, string>>({})
 const tgStatus = ref<TelegramStatus>({ enabled: false, channels: [], auto_transfer: true, ingested_count: 0 })
 const channelsText = ref('')
@@ -28,18 +22,35 @@ const parseResult = ref<TelegramParseResult | null>(null)
 const parsing = ref(false)
 const { toast } = useToast()
 
-onMounted(async () => {
-  try {
-    const [diagnostics, status] = await Promise.all([doctorApi.diagnose(), telegramApi.status()])
-    report.value = diagnostics
+// 系统自检与 Telegram 状态并行查询（自检与「我的追剧」共用 ['doctor'] 查询）
+const doctorQuery = useQuery({
+  queryKey: ['doctor'],
+  queryFn: () => doctorApi.diagnose(),
+})
+const report = computed(() => doctorQuery.data.value ?? null)
+
+const tgStatusQuery = useQuery({
+  queryKey: ['telegram', 'status'],
+  queryFn: () => telegramApi.status(),
+})
+// 状态首次到达时回填状态与表单字段（之后保存配置只刷新 tgStatus，不覆盖正在编辑的表单）
+watch(
+  () => tgStatusQuery.data.value,
+  (status) => {
+    if (!status) return
     tgStatus.value = status
     channelsText.value = status.channels.join('\n')
     autoTransfer.value = status.auto_transfer
     telegramEnabled.value = status.enabled
-  } catch (error) {
-    toast(error instanceof Error ? error.message : '读取监控状态失败', 'error')
-  }
-})
+  },
+  { once: true },
+)
+watch(
+  () => doctorQuery.error.value ?? tgStatusQuery.error.value,
+  (error) => {
+    if (error) toast(error instanceof Error ? error.message : '读取监控状态失败', 'error')
+  },
+)
 
 async function test(provider: string) {
   try {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
 import { Compass, Film, Star, Plus, Check, Search } from '@lucide/vue'
 
 import Badge from '@/components/ui/Badge.vue'
@@ -9,7 +10,8 @@ import Input from '@/components/ui/Input.vue'
 import Tabs from '@/components/ui/Tabs.vue'
 import { useToast } from '@/composables/useToast'
 import { posterSrc } from '@/lib/poster'
-import { subscriptionsApi, tmdbApi, type TmdbItem } from '@/lib/api'
+import { subscriptionsApi } from '@/api/subscriptions'
+import { tmdbApi, type TmdbItem } from '@/api/tmdb'
 
 const tabs = [
   { value: 'trending', label: '流行趋势' },
@@ -20,8 +22,6 @@ const tabs = [
   { value: 'season', label: '本季新番' },
 ]
 const activeTab = ref('trending')
-const items = ref<TmdbItem[]>([])
-const loading = ref(false)
 const { toast } = useToast()
 
 const typeFilter = ref<'all' | 'movie' | 'tv'>('all')
@@ -54,64 +54,74 @@ const detailOpen = ref(false)
 const subscribing = ref(false)
 const subscribedIds = ref<Set<number>>(new Set())
 
-async function loadSubscribed() {
-  try {
-    const subs = await subscriptionsApi.list()
+// 榜单数据按页签分键查询（搜索模式下停用，改用下方的一次性搜索结果）
+const browseQuery = useQuery({
+  queryKey: computed(() => ['discover', activeTab.value] as const),
+  queryFn: () => {
+    switch (activeTab.value) {
+      case 'showing':
+        return tmdbApi.douban('showing')
+      case 'movie_hot':
+        return tmdbApi.douban('movie_hot')
+      case 'tv_hot':
+        return tmdbApi.douban('tv_hot')
+      case 'calendar':
+        return tmdbApi.bangumiCalendar()
+      case 'season':
+        return tmdbApi.anilistSeason()
+      default:
+        return tmdbApi.trending()
+    }
+  },
+  enabled: computed(() => !searchMode.value),
+})
+const searchResults = ref<TmdbItem[] | null>(null)
+const items = computed(() =>
+  searchMode.value ? (searchResults.value ?? []) : (browseQuery.data.value ?? []),
+)
+const loading = computed(
+  () => searching.value || (!searchMode.value && browseQuery.isFetching.value),
+)
+watch(
+  () => browseQuery.error.value,
+  (cause) => {
+    if (cause) toast('获取推荐榜单失败，请稍后重试', 'error')
+  },
+)
+
+// 已订阅集合与「我的订阅」共用 ['subscriptions'] 查询
+const subsQuery = useQuery({
+  queryKey: ['subscriptions'],
+  queryFn: () => subscriptionsApi.list(),
+})
+watch(
+  () => subsQuery.data.value,
+  (subs) => {
+    if (!subs) return
     const set = new Set<number>()
     for (const s of subs) {
       if (s.media?.tmdb_id) set.add(s.media.tmdb_id)
     }
     subscribedIds.value = set
-  } catch {}
-}
+  },
+)
 
 async function fetchItems() {
-  loading.value = true
-  items.value = []
-  try {
-    if (activeTab.value === 'trending') {
-      items.value = await tmdbApi.trending()
-    } else if (activeTab.value === 'showing') {
-      items.value = await tmdbApi.douban('showing')
-    } else if (activeTab.value === 'movie_hot') {
-      items.value = await tmdbApi.douban('movie_hot')
-    } else if (activeTab.value === 'tv_hot') {
-      items.value = await tmdbApi.douban('tv_hot')
-    } else if (activeTab.value === 'calendar') {
-      items.value = await tmdbApi.bangumiCalendar()
-    } else if (activeTab.value === 'season') {
-      items.value = await tmdbApi.anilistSeason()
-    }
-  } catch (cause) {
-    toast('获取推荐榜单失败，请稍后重试', 'error')
-  } finally {
-    loading.value = false
-  }
+  await browseQuery.refetch()
 }
-
-onMounted(() => {
-  void fetchItems()
-  void loadSubscribed()
-})
-
-watch(activeTab, () => {
-  if (!searchMode.value) void fetchItems()
-})
 
 async function runSearch() {
   const query = keyword.value.trim()
   if (!query) return
   searchKeyword.value = query
   searching.value = true
-  loading.value = true
-  items.value = []
+  searchResults.value = []
   try {
-    items.value = await tmdbApi.search(query)
+    searchResults.value = await tmdbApi.search(query)
   } catch (cause) {
     toast(cause instanceof Error ? cause.message : '搜索失败，请稍后重试', 'error')
   } finally {
     searching.value = false
-    loading.value = false
   }
 }
 
@@ -223,7 +233,7 @@ async function subscribeItem() {
         <span class="text-subtle">类型</span>
         <select
           v-model="typeFilter"
-          class="rounded-lg border border-border/70 bg-surface-2/60 px-2.5 py-1.5 text-xs text-fg outline-none focus:border-zinc-500"
+          class="rounded-lg border border-border/70 bg-surface-2/60 px-2.5 py-1.5 text-xs text-fg outline-none focus:border-subtle"
         >
           <option value="all">全部</option>
           <option value="movie">电影</option>
@@ -234,7 +244,7 @@ async function subscribeItem() {
         <span class="text-subtle">年份</span>
         <select
           v-model="yearFilter"
-          class="rounded-lg border border-border/70 bg-surface-2/60 px-2.5 py-1.5 text-xs text-fg outline-none focus:border-zinc-500"
+          class="rounded-lg border border-border/70 bg-surface-2/60 px-2.5 py-1.5 text-xs text-fg outline-none focus:border-subtle"
         >
           <option value="all">全部</option>
           <option value="this">今年</option>
@@ -245,7 +255,7 @@ async function subscribeItem() {
         <span class="text-subtle">评分</span>
         <select
           v-model="ratingFilter"
-          class="rounded-lg border border-border/70 bg-surface-2/60 px-2.5 py-1.5 text-xs text-fg outline-none focus:border-zinc-500"
+          class="rounded-lg border border-border/70 bg-surface-2/60 px-2.5 py-1.5 text-xs text-fg outline-none focus:border-subtle"
         >
           <option value="all">全部</option>
           <option value="7">7+</option>
@@ -306,7 +316,7 @@ async function subscribeItem() {
       <article
         v-for="item in filteredItems"
         :key="item.id"
-        class="group relative flex flex-col overflow-hidden rounded-2xl border border-border/70 bg-surface/80 shadow-sm transition-all duration-200 hover:-translate-y-1.5 hover:border-zinc-700 hover:shadow-xl hover:shadow-black/60 cursor-pointer"
+        class="group relative flex flex-col overflow-hidden rounded-2xl border border-border/70 bg-surface/80 shadow-sm transition-all duration-200 hover:-translate-y-1.5 hover:border-surface-3 hover:shadow-xl hover:shadow-black/60 cursor-pointer"
         @click="openDetail(item)"
       >
         <!-- 海报图 (2:3 国际标准海报比例) -->
@@ -318,18 +328,18 @@ async function subscribeItem() {
             loading="lazy"
             class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
-          <div v-else class="grid h-full w-full place-items-center bg-zinc-900 text-subtle">
+          <div v-else class="grid h-full w-full place-items-center bg-surface-solid text-subtle">
             <Film class="h-10 w-10 opacity-30" />
           </div>
 
           <!-- 顶部评分与类型胶囊 -->
           <div class="absolute inset-x-2.5 top-2.5 flex items-center justify-between">
-            <span class="rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-zinc-300 backdrop-blur-md uppercase">
+            <span class="rounded-md bg-bg/60 px-1.5 py-0.5 text-[10px] font-medium text-fg-2 backdrop-blur-md uppercase">
               {{ item.type === 'movie' ? '电影' : '剧集' }}
             </span>
             <span
               v-if="item.vote_average > 0"
-              class="flex items-center gap-1 rounded-md bg-black/70 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-amber-400 backdrop-blur-md shadow-sm"
+              class="flex items-center gap-1 rounded-md bg-bg/70 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-amber-400 backdrop-blur-md shadow-sm"
             >
               <Star class="h-3 w-3 fill-amber-400 text-amber-400" />
               <span>{{ item.vote_average.toFixed(1) }}</span>
@@ -339,7 +349,7 @@ async function subscribeItem() {
           <!-- 已追剧状态角标 -->
           <div
             v-if="subscribedIds.has(item.id)"
-            class="absolute bottom-2.5 right-2.5 rounded-md bg-emerald-500/90 px-2 py-0.5 text-[10px] font-medium text-white shadow-md backdrop-blur-md flex items-center gap-1"
+            class="absolute bottom-2.5 right-2.5 rounded-md bg-emerald-500/90 px-2 py-0.5 text-[10px] font-medium text-fg shadow-md backdrop-blur-md flex items-center gap-1"
           >
             <Check class="h-3 w-3" />
             <span>已在追更</span>
@@ -353,7 +363,7 @@ async function subscribeItem() {
           </h3>
           <div class="mt-1 flex items-center justify-between text-[11px] text-subtle">
             <span>{{ item.year || '近期' }}</span>
-            <span class="text-zinc-400 group-hover:text-fg transition-colors">查看详情 →</span>
+            <span class="text-muted group-hover:text-fg transition-colors">查看详情 →</span>
           </div>
         </div>
       </article>
@@ -368,13 +378,13 @@ async function subscribeItem() {
           class="relative h-44 w-full overflow-hidden rounded-xl bg-surface-2 -mt-1"
         >
           <img :src="selected.backdrop_url" class="h-full w-full object-cover" />
-          <div class="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/40 to-transparent" />
+          <div class="absolute inset-0 bg-gradient-to-t from-canvas via-canvas/40 to-transparent" />
           <div class="absolute bottom-3 left-4 right-4 flex items-end justify-between">
             <div>
               <h3 class="text-xl font-bold text-fg drop-shadow-md">{{ selected.title }}</h3>
-              <p class="text-xs text-zinc-300 drop-shadow">{{ selected.year }} · {{ selected.type === 'movie' ? '电影' : '电视剧' }}</p>
+              <p class="text-xs text-fg-2 drop-shadow">{{ selected.year }} · {{ selected.type === 'movie' ? '电影' : '电视剧' }}</p>
             </div>
-            <span class="flex items-center gap-1 rounded-md bg-black/70 px-2 py-1 font-mono text-sm font-bold text-amber-400 backdrop-blur-md">
+            <span class="flex items-center gap-1 rounded-md bg-bg/70 px-2 py-1 font-mono text-sm font-bold text-amber-400 backdrop-blur-md">
               <Star class="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
               <span>{{ selected.vote_average.toFixed(1) }}</span>
             </span>
@@ -384,7 +394,7 @@ async function subscribeItem() {
         <!-- 剧情简介 -->
         <div class="space-y-1.5 text-xs text-muted">
           <span class="font-medium text-fg">剧情简介</span>
-          <p class="leading-relaxed line-clamp-4 text-zinc-300">
+          <p class="leading-relaxed line-clamp-4 text-fg-2">
             {{ selected.overview || '暂无详细简介。' }}
           </p>
         </div>

@@ -23,17 +23,20 @@ from csx.api.routes import (
     drives,
     duplicate,
     health,
+    library,
     naming,
     offline,
     organize,
     p6,
-    resources,
+    platform,
     search,
     sources,
     stream,
+    subscriptions,
     system,
     tg,
     tmdb,
+    transfer,
     transfer_settings,
 )
 from csx.api.routes import media as media_proxy
@@ -143,16 +146,16 @@ async def validation_exception_handler(
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 for resource_router in (
-    resources.subscriptions,
-    resources.progress,
-    resources.candidates,
-    resources.tasks,
-    resources.history,
-    resources.library,
-    resources.settings_api,
-    resources.accounts,
-    resources.doctor,
-    resources.events,
+    subscriptions.subscriptions,
+    library.progress,
+    subscriptions.candidates,
+    transfer.tasks,
+    transfer.history,
+    library.library,
+    platform.settings_api,
+    platform.accounts,
+    platform.doctor,
+    platform.events,
 ):
     app.include_router(resource_router, prefix="/api/v1")
 app.include_router(p6.checkin, prefix="/api/v1")

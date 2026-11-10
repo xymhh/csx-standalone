@@ -3,7 +3,8 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import Button from '@/components/ui/Button.vue'
-import { api, authApi } from '@/lib/api'
+import { authApi } from '@/api/auth'
+import { api } from '@/api/client'
 
 interface Meta {
   name: string

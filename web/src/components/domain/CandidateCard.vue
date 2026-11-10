@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
-import type { Candidate } from '@/lib/api'
+import type { Candidate } from '@/api/subscriptions'
 
 defineProps<{ candidate: Candidate }>()
 defineEmits<{ accept: [id: number]; ignore: [id: number] }>()
 </script>
 
 <template>
-  <article class="surface-card group relative overflow-hidden p-5 transition-colors hover:border-zinc-700">
+  <article class="surface-card group relative overflow-hidden p-5 transition-colors hover:border-surface-3">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="min-w-0">
         <p class="mb-1.5 font-mono text-[11px] uppercase tracking-wider text-muted">

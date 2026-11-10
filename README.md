@@ -119,6 +119,8 @@ docker compose logs -f csx
 
 # 前端门禁（在 web/）
 npm run typecheck
+npm run lint
+npm run test
 npm run build
 
 # 在线热备（在 backend/，容器内使用同一份 /data 挂载）
@@ -167,6 +169,9 @@ npm run build
 - [传输与下载 UI 本地渲染验收](docs/test/2026-11-10-传输与下载UI-本地渲染验收.md)
 - [传输与下载 UI 完成总结](docs/summary/2026-11-10-传输与下载UI对齐CS插件-完成.md)
 - [搜索新资源（接入后台已配置渠道）架构](docs/plan/2026-11-10-搜索新资源-架构.md)
+- [全量重构日志（阶段 1–4）](docs/summary/2026-11-10-全量重构日志.md)
+- [全量重构验收](docs/test/2026-11-10-全量重构验收.md)
+- [全量重构完成总结](docs/summary/2026-11-10-全量重构-完成.md)
 
 ## 许可证
 

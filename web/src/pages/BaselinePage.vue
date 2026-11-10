@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
 import { Plus, RefreshCw, Trash2, Pause, Play, Film, SlidersHorizontal } from '@lucide/vue'
 
 import Badge from '@/components/ui/Badge.vue'
@@ -8,9 +9,13 @@ import Dialog from '@/components/ui/Dialog.vue'
 import Input from '@/components/ui/Input.vue'
 import Select from '@/components/ui/Select.vue'
 import { useToast } from '@/composables/useToast'
-import { subscriptionsApi, type Subscription } from '@/lib/api'
+import { subscriptionsApi, type Subscription } from '@/api/subscriptions'
 
-const rows = ref<Subscription[]>([])
+const subscriptionsQuery = useQuery({
+  queryKey: ['subscriptions'],
+  queryFn: () => subscriptionsApi.list(),
+})
+const rows = computed(() => subscriptionsQuery.data.value ?? [])
 const open = ref(false)
 const syncingId = ref<number | null>(null)
 const { toast } = useToast()
@@ -25,10 +30,8 @@ const tmdbId = ref<number | undefined>(undefined)
 const showAdvanced = ref(false)
 
 async function load() {
-  rows.value = await subscriptionsApi.list()
+  await subscriptionsQuery.refetch()
 }
-
-onMounted(load)
 
 async function create() {
   try {
@@ -97,7 +100,7 @@ async function sync(id: number) {
     </div>
 
     <div class="grid gap-3.5 md:grid-cols-2 xl:grid-cols-3">
-      <article v-for="row in rows" :key="row.id" class="rounded-xl border border-border bg-surface p-5 transition-all hover:border-zinc-700">
+      <article v-for="row in rows" :key="row.id" class="rounded-xl border border-border bg-surface p-5 transition-all hover:border-surface-3">
         <div class="flex items-start justify-between">
           <div>
             <h3 class="font-semibold text-fg">{{ row.media?.title ?? `影视 #${row.media_id}` }}</h3>

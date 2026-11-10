@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
-import type { Task } from '@/lib/api'
+import type { Task } from '@/api/transfer'
 
 defineProps<{ task: Task }>()
 defineEmits<{ retry: [id: number]; cancel: [id: number] }>()

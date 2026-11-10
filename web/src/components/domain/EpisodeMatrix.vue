@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ProgressSeason } from '@/lib/api'
+import type { ProgressSeason } from '@/api/subscriptions'
 
 defineProps<{ seasons: ProgressSeason[] }>()
 </script>

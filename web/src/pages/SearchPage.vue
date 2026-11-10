@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
 import { Copy, ExternalLink, LoaderCircle, Search, Settings2, WifiOff } from '@lucide/vue'
 
 import Badge from '@/components/ui/Badge.vue'
@@ -8,7 +9,7 @@ import Card from '@/components/ui/Card.vue'
 import Input from '@/components/ui/Input.vue'
 import Select from '@/components/ui/Select.vue'
 import ManualTransferDialog from '@/components/dialogs/ManualTransferDialog.vue'
-import { searchApi, type SearchResultItem, type SearchSourceOption, type SearchSourceStatus } from '@/lib/api'
+import { searchApi, type SearchResultItem, type SearchSourceOption, type SearchSourceStatus } from '@/api/search'
 import { useToast } from '@/composables/useToast'
 
 const { toast } = useToast()
@@ -19,7 +20,12 @@ const season = ref('')
 const perSource = ref('20')
 const loading = ref(false)
 const searched = ref(false)
-const options = ref<SearchSourceOption[]>([])
+// 可用搜索源（加载失败时按空列表处理，与改造前一致）
+const sourcesQuery = useQuery({
+  queryKey: ['search', 'sources'],
+  queryFn: () => searchApi.sources(),
+})
+const options = computed<SearchSourceOption[]>(() => sourcesQuery.data.value?.sources ?? [])
 const selectedSources = ref<string[]>([])
 const statuses = ref<SearchSourceStatus[]>([])
 const items = ref<SearchResultItem[]>([])
@@ -55,15 +61,6 @@ const summary = computed(() => {
   return parts.join(' · ')
 })
 const canSearch = computed(() => keyword.value.trim().length > 0 && !loading.value)
-
-onMounted(async () => {
-  try {
-    const data = await searchApi.sources()
-    options.value = data.sources
-  } catch {
-    options.value = []
-  }
-})
 
 function toggleSource(id: string, enabled: boolean) {
   if (!enabled) return
