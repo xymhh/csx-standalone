@@ -131,10 +131,8 @@ async function runAutoSearchNow() {
     const response = await autoSearchApi.run({ force: true })
     const result = response.result
     const count = result.total ?? result.processed?.length ?? 0
-    toast(
-      `已跑 ${count} 部订阅：新候选 ${result.candidates ?? 0} 个，新建转存 ${(result.tasks ?? []).length} 个`,
-      'success',
-    )
+    const taskCount = Array.isArray(result.tasks) ? result.tasks.length : Number(result.tasks ?? 0)
+    toast(`已跑 ${count} 部订阅：新候选 ${result.candidates ?? 0} 个，新建转存 ${taskCount} 个`, 'success')
   } catch (cause) {
     toast(cause instanceof Error ? cause.message : '触发失败', 'error')
   } finally {
