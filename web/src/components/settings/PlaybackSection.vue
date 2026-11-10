@@ -115,19 +115,19 @@ onMounted(() => {
 </script>
 
 <template>
-    <!-- 5. 播放与整理 (紧凑卡片网格) -->
-    <div class="space-y-5">
-      <div class="grid gap-4 md:grid-cols-2">
-        <StrmCard v-model:form="form" />
-        <EmbyCard v-model:form="form" />
-      </div>
-
-      <OrganizeCard v-model:form="form" :accounts="accounts" @browse="openDirBrowse" />
-      <CrossTransferCard />
-      <CategoryCard ref="categoryCardRef" />
+  <!-- 5. 播放与整理 (紧凑卡片网格) -->
+  <div class="space-y-5">
+    <div class="grid gap-4 md:grid-cols-2">
+      <StrmCard v-model:form="form" />
+      <EmbyCard v-model:form="form" />
     </div>
 
-    <!-- 目录树选择弹窗 -->
+    <OrganizeCard v-model:form="form" :accounts="accounts" @browse="openDirBrowse" />
+    <CrossTransferCard />
+    <CategoryCard ref="categoryCardRef" />
+
+    <!-- 目录树选择弹窗：Dialog 内部 Teleport 到 body，放在根节点内不影响布局；
+           必须留在唯一根节点内，否则 v-show 无法作用于组件（多根节点会被忽略） -->
     <DirectorySelectDialog
       v-if="dirDialogOpen"
       :open="dirDialogOpen"
@@ -136,4 +136,5 @@ onMounted(() => {
       @close="dirDialogOpen = false"
       @select="handleDirSelect"
     />
+  </div>
 </template>

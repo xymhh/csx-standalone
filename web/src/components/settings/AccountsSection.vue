@@ -175,7 +175,7 @@ async function setAccountPrimary(account: Account) {
     await accountsApi.update(account.id, { is_primary: true })
     for (const a of accounts.value) {
       if (a.provider === account.provider) {
-        a.is_primary = (a.id === account.id)
+        a.is_primary = a.id === account.id
       }
     }
     toast(`已将 ${account.name} 设为默认${account.provider === '115' ? '115' : '夸克'}主号`, 'success')
@@ -225,9 +225,7 @@ async function testAccount(id: number) {
 async function handleAccountDirSelect(path: string) {
   if (dirTarget.value === 'account_path' && targetAccountForBrowse.value) {
     const acc = targetAccountForBrowse.value
-    const updatePayload = targetPathType.value === 'transfer'
-      ? { transfer_path: path }
-      : { media_path: path }
+    const updatePayload = targetPathType.value === 'transfer' ? { transfer_path: path } : { media_path: path }
     try {
       await accountsApi.update(acc.id, updatePayload)
       if (targetPathType.value === 'transfer') acc.transfer_path = path
@@ -242,87 +240,86 @@ async function handleAccountDirSelect(path: string) {
 </script>
 
 <template>
-    <!-- 1. 网盘账号 (既能输入 Cookie 也能扫码) -->
-    <div class="space-y-5">
-      <!-- 新增网盘账号卡片：输入框集成扫码 Icon -->
-      <div class="apple-glass rounded-2xl p-5 space-y-4">
-        <div class="flex items-center justify-between border-b border-primary/[0.06] pb-3">
-          <div class="flex items-center gap-2">
-            <Cloud class="h-4 w-4 text-blue-400" />
-            <h3 class="text-sm font-semibold text-fg">添加网盘账号</h3>
-          </div>
-          <span class="text-[11px] text-muted">支持直接粘贴 Cookie，或点击右侧扫码图标手机扫码免密登录</span>
+  <!-- 1. 网盘账号 (既能输入 Cookie 也能扫码) -->
+  <div class="space-y-5">
+    <!-- 新增网盘账号卡片：输入框集成扫码 Icon -->
+    <div class="apple-glass rounded-2xl p-5 space-y-4">
+      <div class="flex items-center justify-between border-b border-primary/[0.06] pb-3">
+        <div class="flex items-center gap-2">
+          <Cloud class="h-4 w-4 text-blue-400" />
+          <h3 class="text-sm font-semibold text-fg">添加网盘账号</h3>
         </div>
-
-        <div class="grid gap-3 sm:grid-cols-12 items-center">
-          <div class="sm:col-span-3">
-            <Select
-              v-model="newAccountProvider"
-              :options="[
-                { value: '115', label: '115 网盘' },
-                { value: 'quark', label: '夸克网盘' },
-              ]"
-            />
-          </div>
-
-          <div class="sm:col-span-3">
-            <Input v-model="newAccountName" placeholder="账号备注 (如: 我的主号)" />
-          </div>
-
-          <!-- 核心：输入框内置扫码图标 -->
-          <div class="sm:col-span-4 relative flex items-center">
-            <input
-              v-model="newAccountCookie"
-              type="password"
-              placeholder="粘贴 Cookie / Token 凭据"
-              class="w-full h-9 rounded-xl border border-primary/10 bg-surface-solid/60 pl-3 pr-10 text-xs text-fg placeholder-subtle outline-none focus:border-primary/20 transition-colors"
-            />
-            <button
-              type="button"
-              class="absolute right-1.5 p-1.5 rounded-lg text-muted hover:text-fg hover:bg-primary/10 transition-colors cursor-pointer"
-              title="手机扫码快速登录"
-              @click="openScanDialog(newAccountProvider)"
-            >
-              <QrCode class="h-4 w-4 text-blue-400" />
-            </button>
-          </div>
-
-          <div class="sm:col-span-2">
-            <Button
-              size="sm"
-              class="apple-btn-primary w-full h-9 text-xs"
-              :disabled="addingAccount"
-              @click="handleAddAccountByCookie"
-            >
-              {{ addingAccount ? '添加中…' : '添加网盘' }}
-            </Button>
-          </div>
-        </div>
+        <span class="text-[11px] text-muted">支持直接粘贴 Cookie，或点击右侧扫码图标手机扫码免密登录</span>
       </div>
 
-      <!-- 已绑定网盘列表 -->
-      <div class="space-y-3">
-        <h4 class="text-xs font-semibold text-muted uppercase tracking-wider">已连接的网盘</h4>
-
-        <div v-if="!accounts.length" class="apple-glass rounded-2xl p-12 text-center space-y-2">
-          <HardDrive class="mx-auto h-7 w-7 text-faint" />
-          <p class="text-sm font-semibold text-fg">尚未绑定任何网盘</p>
-          <p class="text-xs text-subtle">在上方粘贴 Cookie 或点击右侧扫码图标，即可绑定你的 115 或夸克网盘。</p>
-        </div>
-
-        <div v-else class="grid gap-4 sm:grid-cols-2">
-          <AccountCard
-            v-for="acc in accounts"
-            :key="acc.id"
-            :account="acc"
-            :loading="Boolean(accountRefreshing[acc.id])"
-            @refresh="testAccount"
-            @remove="removeAccount"
-            @toggle="toggleAccountEnabled"
-            @set-primary="setAccountPrimary"
-            @browse="openAccountDirBrowse"
+      <div class="grid gap-3 sm:grid-cols-12 items-center">
+        <div class="sm:col-span-3">
+          <Select
+            v-model="newAccountProvider"
+            :options="[
+              { value: '115', label: '115 网盘' },
+              { value: 'quark', label: '夸克网盘' },
+            ]"
           />
         </div>
+
+        <div class="sm:col-span-3">
+          <Input v-model="newAccountName" placeholder="账号备注 (如: 我的主号)" />
+        </div>
+
+        <!-- 核心：输入框内置扫码图标 -->
+        <div class="sm:col-span-4 relative flex items-center">
+          <input
+            v-model="newAccountCookie"
+            type="password"
+            placeholder="粘贴 Cookie / Token 凭据"
+            class="w-full h-9 rounded-xl border border-primary/10 bg-surface-solid/60 pl-3 pr-10 text-xs text-fg placeholder-subtle outline-none focus:border-primary/20 transition-colors"
+          />
+          <button
+            type="button"
+            class="absolute right-1.5 p-1.5 rounded-lg text-muted hover:text-fg hover:bg-primary/10 transition-colors cursor-pointer"
+            title="手机扫码快速登录"
+            @click="openScanDialog(newAccountProvider)"
+          >
+            <QrCode class="h-4 w-4 text-blue-400" />
+          </button>
+        </div>
+
+        <div class="sm:col-span-2">
+          <Button
+            size="sm"
+            class="apple-btn-primary w-full h-9 text-xs"
+            :disabled="addingAccount"
+            @click="handleAddAccountByCookie"
+          >
+            {{ addingAccount ? '添加中…' : '添加网盘' }}
+          </Button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 已绑定网盘列表 -->
+    <div class="space-y-3">
+      <h4 class="text-xs font-semibold text-muted uppercase tracking-wider">已连接的网盘</h4>
+
+      <div v-if="!accounts.length" class="apple-glass rounded-2xl p-12 text-center space-y-2">
+        <HardDrive class="mx-auto h-7 w-7 text-faint" />
+        <p class="text-sm font-semibold text-fg">尚未绑定任何网盘</p>
+        <p class="text-xs text-subtle">在上方粘贴 Cookie 或点击右侧扫码图标，即可绑定你的 115 或夸克网盘。</p>
+      </div>
+
+      <div v-else class="grid gap-4 sm:grid-cols-2">
+        <AccountCard
+          v-for="acc in accounts"
+          :key="acc.id"
+          :account="acc"
+          :loading="Boolean(accountRefreshing[acc.id])"
+          @refresh="testAccount"
+          @remove="removeAccount"
+          @toggle="toggleAccountEnabled"
+          @set-primary="setAccountPrimary"
+          @browse="openAccountDirBrowse"
+        />
       </div>
     </div>
 
@@ -334,14 +331,18 @@ async function handleAccountDirSelect(path: string) {
           <Input v-model="qrName" placeholder="例如：我的主号" />
         </div>
 
-        <div class="flex flex-col items-center justify-center rounded-2xl border border-primary/10 bg-surface-solid/60 p-6">
+        <div
+          class="flex flex-col items-center justify-center rounded-2xl border border-primary/10 bg-surface-solid/60 p-6"
+        >
           <div v-if="qrData?.qrcode" class="space-y-3 text-center">
             <div class="p-3 bg-primary rounded-2xl inline-block shadow-md">
               <img :src="qrData.qrcode" class="h-44 w-44 object-contain" />
             </div>
             <div class="space-y-1">
               <Badge :tone="qrStatus === 'scanned' ? 'good' : qrStatus === 'expired' ? 'bad' : 'warn'">
-                {{ qrStatus === 'scanned' ? '已扫码，等待手机端确认' : qrStatus === 'expired' ? '已失效' : '等待手机扫码' }}
+                {{
+                  qrStatus === 'scanned' ? '已扫码，等待手机端确认' : qrStatus === 'expired' ? '已失效' : '等待手机扫码'
+                }}
               </Badge>
               <p class="text-xs text-muted mt-1">{{ qrData.hint }}</p>
             </div>
@@ -356,13 +357,7 @@ async function handleAccountDirSelect(path: string) {
           </div>
         </div>
 
-        <Button
-          v-if="qrStatus === 'expired'"
-          class="w-full"
-          @click="startQrcode"
-        >
-          重新生成二维码
-        </Button>
+        <Button v-if="qrStatus === 'expired'" class="w-full" @click="startQrcode"> 重新生成二维码 </Button>
       </div>
     </Dialog>
 
@@ -375,4 +370,5 @@ async function handleAccountDirSelect(path: string) {
       @close="dirDialogOpen = false"
       @select="handleAccountDirSelect"
     />
+  </div>
 </template>
